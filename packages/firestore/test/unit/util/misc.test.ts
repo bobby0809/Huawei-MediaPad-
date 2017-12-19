@@ -17,7 +17,9 @@
 import { expect } from 'chai';
 import {
   immediatePredecessor,
-  immediateSuccessor
+  immediateSuccessor,
+  truncatedLoopComparator,
+  truncatedSubstringComparator
 } from '../../../src/util/misc';
 
 describe('immediatePredecessor', () => {
@@ -39,5 +41,37 @@ describe('immediateSuccessor', () => {
   it('generates the correct immediate successors', () => {
     expect(immediateSuccessor('hello')).to.equal('hello\0');
     expect(immediateSuccessor('')).to.equal('\0');
+  });
+});
+
+describe('truncation', () => {
+  const ITERATIONS = 1000;
+  const mb = 1024 * 1024 * 10;
+  it('times the loop method', () => {
+    const cmp = truncatedLoopComparator(mb);
+    const a = 'a'.repeat(mb);
+    const b = 'b'.repeat(mb -1 ) + 'b';
+    const start = Date.now();
+    for (let i = 0; i < ITERATIONS; i++) {
+      const result = cmp(a, b);
+      expect(result).to.equal(-1);
+    }
+    const end = Date.now();
+    const elapsed = end - start;
+    console.log('Elapsed: ' + elapsed + 'ms');
+  });
+
+  it('times the substring method', () => {
+    const cmp = truncatedSubstringComparator(mb);
+    const a = 'a'.repeat(mb);
+    const b = 'b'.repeat(mb -1 ) + 'b';
+    const start = Date.now();
+    for (let i = 0; i < ITERATIONS; i++) {
+      const result = cmp(a, b);
+      expect(result).to.equal(-1);
+    }
+    const end = Date.now();
+    const elapsed = end - start;
+    console.log('Elapsed: ' + elapsed + 'ms');
   });
 });

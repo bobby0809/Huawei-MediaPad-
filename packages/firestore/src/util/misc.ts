@@ -46,6 +46,48 @@ export class AutoId {
   }
 }
 
+export let truncatedSubstringComparator = (limit: number) =>
+  (left: string, right: string): number => {
+
+  const l = left.substr(0, limit);
+  const r = right.substr(0, limit);
+  if (l < r) return -1;
+  if (r < l) return 1;
+  return 0;
+}
+
+export let truncatedLoopComparator = (limit: number) =>
+  (left: string, right: string): number => {
+
+  let i = 0;
+  while (i < limit) {
+    if (i == left.length) {
+      if (i == right.length) {
+        // We've exhausted both strings without finding a difference.
+        return 0;
+      } else {
+        // We've exhausted the left side but not the right. Therefore, left is
+        // less than right.
+        return -1;
+      }
+    } else if (i == right.length) {
+      // We've exhausted right but not left. Left is greater.
+      return 1;
+    } else {
+      if (left[i] < right[i]) {
+        return -1;
+      } else if (left[i] > right[i]) {
+        return 1;
+      } else {
+        // left[i] == right[i], check next character
+        i++;
+      }
+    }
+  }
+  // We've exhausted the limit without finding a difference.
+  return 0;
+};
+
 export function primitiveComparator<T>(left: T, right: T): number {
   if (left < right) return -1;
   if (left > right) return 1;

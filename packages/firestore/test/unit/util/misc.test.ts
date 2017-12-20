@@ -17,7 +17,8 @@
 import { expect } from 'chai';
 import {
   immediatePredecessor,
-  immediateSuccessor, truncatedStringLength,
+  immediateSuccessor,
+  truncatedStringLength
 } from '../../../src/util/misc';
 
 describe('immediatePredecessor', () => {
@@ -43,11 +44,11 @@ describe('immediateSuccessor', () => {
 });
 
 type TestCase = {
-  input: string,
-  threshold: number
-  length: number
-  output: string
-}
+  input: string;
+  threshold: number;
+  length: number;
+  output: string;
+};
 describe('truncating strings', () => {
   it('generates the right truncation index', () => {
     const testCases: Array<TestCase> = [
@@ -144,11 +145,15 @@ describe('truncating strings', () => {
     ];
     for (const { input, threshold, length, output } of testCases) {
       const index = truncatedStringLength(threshold)(input);
-      expect(index)
-        .to.equal(length, 'Input: "' + input + '", threshold: ' + threshold);
+      expect(index).to.equal(
+        length,
+        'Input: "' + input + '", threshold: ' + threshold
+      );
       const actual = input.substr(0, index);
-      expect(actual)
-        .to.equal(output, 'Input: "' + input + '", index: ' + index);
+      expect(actual).to.equal(
+        output,
+        'Input: "' + input + '", index: ' + index
+      );
     }
   });
 });

@@ -17,7 +17,7 @@
 import { expect } from 'chai';
 import { Blob, PublicBlob } from '../../../src/api/blob';
 import { blob, expectCorrectComparisons } from '../../util/helpers';
-import {IndexTruncationThresholdBytes} from '../../../src/util/misc';
+import { IndexTruncationThresholdBytes } from '../../../src/util/misc';
 
 describe('Blob', () => {
   const base64Mappings: { [base64: string]: number[] } = {
@@ -85,10 +85,12 @@ describe('Blob', () => {
   });
 
   it('truncates large blobs', () => {
-    const l =
-      new Uint8Array(IndexTruncationThresholdBytes + 1).fill('a'.charCodeAt(0));
-    const r =
-      new Uint8Array(IndexTruncationThresholdBytes + 1).fill('a'.charCodeAt(0));
+    const l = new Uint8Array(IndexTruncationThresholdBytes + 1).fill(
+      'a'.charCodeAt(0)
+    );
+    const r = new Uint8Array(IndexTruncationThresholdBytes + 1).fill(
+      'a'.charCodeAt(0)
+    );
     r[IndexTruncationThresholdBytes] = 'b'.charCodeAt(0);
 
     const left = Blob.fromUint8Array(l);

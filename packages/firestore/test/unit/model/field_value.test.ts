@@ -31,7 +31,7 @@ import {
   wrap,
   wrapObject
 } from '../../util/helpers';
-import {IndexTruncationThresholdBytes} from '../../../src/util/misc';
+import { IndexTruncationThresholdBytes } from '../../../src/util/misc';
 
 describe('FieldValue', () => {
   const date1 = new Date(2016, 4, 2, 1, 5);

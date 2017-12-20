@@ -20,7 +20,13 @@ import { SnapshotOptions } from '../api/database';
 import { DatabaseId } from '../core/database_info';
 import { Timestamp } from '../core/timestamp';
 import { assert, fail } from '../util/assert';
-import {AnyJs, IndexTruncationThresholdBytes, primitiveComparator, truncatedStringComparator, truncatedStringLength} from '../util/misc';
+import {
+  AnyJs,
+  IndexTruncationThresholdBytes,
+  primitiveComparator,
+  truncatedStringComparator,
+  truncatedStringLength
+} from '../util/misc';
 import * as objUtils from '../util/obj';
 import { SortedMap } from '../util/sorted_map';
 import * as typeUtils from '../util/types';

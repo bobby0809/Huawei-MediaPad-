@@ -48,8 +48,10 @@ export class AutoId {
 
 export const IndexTruncationThresholdBytes = 1500;
 
-export const truncatedStringComparator = (limit: number) =>
-    (left: string, right: string): number => {
+export const truncatedStringComparator = (limit: number) => (
+  left: string,
+  right: string
+): number => {
   const l = left.substr(0, limit);
   const r = right.substr(0, limit);
   if (l < r) return -1;
@@ -57,14 +59,15 @@ export const truncatedStringComparator = (limit: number) =>
   return 0;
 };
 
-const MIN_HIGH_SURROGATE = 0xD800;
-const MAX_HIGH_SURROGATE = 0xDBFF;
+const MIN_HIGH_SURROGATE = 0xd800;
+const MAX_HIGH_SURROGATE = 0xdbff;
 const isHighSurrogate = (c: number): boolean => {
-  return (c >= MIN_HIGH_SURROGATE) && (c <= MAX_HIGH_SURROGATE);
+  return c >= MIN_HIGH_SURROGATE && c <= MAX_HIGH_SURROGATE;
 };
 
-export const truncatedStringLength = (threshold: number) =>
-    (s: string): number => {
+export const truncatedStringLength = (threshold: number) => (
+  s: string
+): number => {
   // count is the number of UTF-8 bytes required to represent the characters
   // up to index `i` in `s`.
   let count = 0;
@@ -74,9 +77,9 @@ export const truncatedStringLength = (threshold: number) =>
   // of `s.length`.
   for (i = 0; i < s.length && count < threshold; ++i) {
     const c = s.charCodeAt(i);
-    if (c <= 0x7F) {
+    if (c <= 0x7f) {
       count += 1;
-    } else if (c <= 0x7FF) {
+    } else if (c <= 0x7ff) {
       count += 2;
     } else if (isHighSurrogate(c)) {
       // This code point is actually two UTF-16 characters, so we can skip

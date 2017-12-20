@@ -20,7 +20,7 @@ import { SnapshotOptions } from '../api/database';
 import { DatabaseId } from '../core/database_info';
 import { Timestamp } from '../core/timestamp';
 import { assert, fail } from '../util/assert';
-import { AnyJs, primitiveComparator } from '../util/misc';
+import {AnyJs, IndexTruncationThresholdBytes, primitiveComparator, truncatedStringComparator, truncatedStringLength} from '../util/misc';
 import * as objUtils from '../util/obj';
 import { SortedMap } from '../util/sorted_map';
 import * as typeUtils from '../util/types';
@@ -286,9 +286,15 @@ export class DoubleValue extends NumberValue {
   // NOTE: compareTo() is implemented in NumberValue.
 }
 
+// Strings are allotted a 1 byte overhead on the server, so our threshold for
+// truncation is the max allowed minus 1 byte.
+const StringUTF8ByteThreshold = IndexTruncationThresholdBytes - 1;
+const stringTruncationIndex = truncatedStringLength(StringUTF8ByteThreshold);
+
 // TODO(b/37267885): Add truncation support
 export class StringValue extends FieldValue {
   typeOrder = TypeOrder.StringValue;
+  private truncationIndex_: number = -1;
 
   constructor(readonly internalValue: string) {
     super();
@@ -306,9 +312,19 @@ export class StringValue extends FieldValue {
 
   compareTo(other: FieldValue): number {
     if (other instanceof StringValue) {
-      return primitiveComparator(this.internalValue, other.internalValue);
+      return primitiveComparator(
+        this.internalValue.substr(0, this.truncationIndex()),
+        other.internalValue.substr(0, other.truncationIndex())
+      );
     }
     return this.defaultCompareTo(other);
+  }
+
+  private truncationIndex(): number {
+    if (this.truncationIndex_ === -1) {
+      this.truncationIndex_ = stringTruncationIndex(this.internalValue);
+    }
+    return this.truncationIndex_;
   }
 }
 

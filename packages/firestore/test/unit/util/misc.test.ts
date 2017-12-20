@@ -17,9 +17,7 @@
 import { expect } from 'chai';
 import {
   immediatePredecessor,
-  immediateSuccessor,
-  truncatedLoopComparator,
-  truncatedSubstringComparator
+  immediateSuccessor, truncatedStringLength,
 } from '../../../src/util/misc';
 
 describe('immediatePredecessor', () => {
@@ -44,34 +42,113 @@ describe('immediateSuccessor', () => {
   });
 });
 
-describe('truncation', () => {
-  const ITERATIONS = 1000;
-  const mb = 1024 * 1024 * 10;
-  it('times the loop method', () => {
-    const cmp = truncatedLoopComparator(mb);
-    const a = 'a'.repeat(mb);
-    const b = 'b'.repeat(mb -1 ) + 'b';
-    const start = Date.now();
-    for (let i = 0; i < ITERATIONS; i++) {
-      const result = cmp(a, b);
-      expect(result).to.equal(-1);
+type TestCase = {
+  input: string,
+  threshold: number
+  length: number
+  output: string
+}
+describe('truncating strings', () => {
+  it('generates the right truncation index', () => {
+    const testCases: Array<TestCase> = [
+      {
+        input: 'clé',
+        threshold: 4,
+        length: 3,
+        output: 'clé'
+      },
+      {
+        input: 'clé',
+        threshold: 3,
+        length: 3,
+        output: 'clé'
+      },
+      {
+        input: 'clément',
+        threshold: 4,
+        length: 3,
+        output: 'clé'
+      },
+      {
+        input: 'clément',
+        threshold: 3,
+        length: 3,
+        output: 'clé'
+      },
+      {
+        input: '€uro',
+        threshold: 4,
+        length: 2,
+        output: '€u'
+      },
+      {
+        input: '€uro',
+        threshold: 3,
+        length: 1,
+        output: '€'
+      },
+      {
+        input: '€uro',
+        threshold: 2,
+        length: 1,
+        output: '€'
+      },
+      {
+        input: '€uro',
+        threshold: 1,
+        length: 1,
+        output: '€'
+      },
+      {
+        input: '€uro',
+        threshold: 0,
+        length: 0,
+        output: ''
+      },
+      {
+        input: '\uD800\uDF48pp',
+        threshold: 5,
+        length: 3,
+        output: '\uD800\uDF48p'
+      },
+      {
+        input: '\uD800\uDF48pp',
+        threshold: 4,
+        length: 2,
+        output: '\uD800\uDF48'
+      },
+      {
+        input: '\uD800\uDF48pp',
+        threshold: 3,
+        length: 2,
+        output: '\uD800\uDF48'
+      },
+      {
+        input: '\uD800\uDF48pp',
+        threshold: 2,
+        length: 2,
+        output: '\uD800\uDF48'
+      },
+      {
+        input: '\uD800\uDF48pp',
+        threshold: 1,
+        length: 2,
+        output: '\uD800\uDF48'
+      },
+      {
+        input: '\uD800\uDF48pp',
+        threshold: 0,
+        length: 0,
+        output: ''
+      }
+    ];
+    for (const { input, threshold, length, output } of testCases) {
+      const index = truncatedStringLength(threshold)(input);
+      expect(index)
+        .to.equal(length, 'Input: "' + input + '", threshold: ' + threshold);
+      const actual = input.substr(0, index);
+      expect(actual)
+        .to.equal(output, 'Input: "' + input + '", index: ' + index);
     }
-    const end = Date.now();
-    const elapsed = end - start;
-    console.log('Elapsed: ' + elapsed + 'ms');
-  });
-
-  it('times the substring method', () => {
-    const cmp = truncatedSubstringComparator(mb);
-    const a = 'a'.repeat(mb);
-    const b = 'b'.repeat(mb -1 ) + 'b';
-    const start = Date.now();
-    for (let i = 0; i < ITERATIONS; i++) {
-      const result = cmp(a, b);
-      expect(result).to.equal(-1);
-    }
-    const end = Date.now();
-    const elapsed = end - start;
-    console.log('Elapsed: ' + elapsed + 'ms');
   });
 });

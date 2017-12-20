@@ -17,6 +17,7 @@
 import { expect } from 'chai';
 import { Blob, PublicBlob } from '../../../src/api/blob';
 import { blob, expectCorrectComparisons } from '../../util/helpers';
+import {IndexTruncationThresholdBytes} from '../../../src/util/misc';
 
 describe('Blob', () => {
   const base64Mappings: { [base64: string]: number[] } = {
@@ -81,5 +82,21 @@ describe('Blob', () => {
     expectCorrectComparisons(values, (left: Blob, right: Blob) => {
       return left._compareTo(right);
     });
+  });
+
+  it('truncates large blobs', () => {
+    const l =
+      new Uint8Array(IndexTruncationThresholdBytes + 1).fill('a'.charCodeAt(0));
+    const r =
+      new Uint8Array(IndexTruncationThresholdBytes + 1).fill('a'.charCodeAt(0));
+    r[IndexTruncationThresholdBytes] = 'b'.charCodeAt(0);
+
+    const left = Blob.fromUint8Array(l);
+    const right = Blob.fromUint8Array(r);
+    expect(left._compareTo(right)).to.equal(0);
+
+    r[IndexTruncationThresholdBytes - 1] = 'b'.charCodeAt(0);
+    const right2 = Blob.fromUint8Array(r);
+    expect(left._compareTo(right2)).to.equal(-1);
   });
 });

@@ -22,7 +22,10 @@ import {
   validateArgType,
   validateExactNumberOfArgs
 } from '../util/input_validation';
-import { primitiveComparator } from '../util/misc';
+import {
+  IndexTruncationThresholdBytes,
+  truncatedStringComparator
+} from '../util/misc';
 
 /** Helper function to assert Uint8Array is available at runtime. */
 function assertUint8ArrayAvailable() {
@@ -43,6 +46,10 @@ function assertBase64Available() {
     );
   }
 }
+
+// There is no overhead added for byte strings, and they truncate exactly at the
+// threshold. So, we can use the entire threshold for comparing blobs.
+const blobCompare = truncatedStringComparator(IndexTruncationThresholdBytes);
 
 /**
  * Immutable class holding a blob (binary data).
@@ -128,7 +135,7 @@ export class Blob {
    * with an underscore.
    */
   public _compareTo(other: Blob): number {
-    return primitiveComparator(this._binaryString, other._binaryString);
+    return blobCompare(this._binaryString, other._binaryString);
   }
 }
 

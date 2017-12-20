@@ -46,47 +46,53 @@ export class AutoId {
   }
 }
 
-export let truncatedSubstringComparator = (limit: number) =>
-  (left: string, right: string): number => {
+export const IndexTruncationThresholdBytes = 1500;
 
+export const truncatedStringComparator = (limit: number) =>
+    (left: string, right: string): number => {
   const l = left.substr(0, limit);
   const r = right.substr(0, limit);
   if (l < r) return -1;
   if (r < l) return 1;
   return 0;
-}
+};
 
-export let truncatedLoopComparator = (limit: number) =>
-  (left: string, right: string): number => {
+const MIN_HIGH_SURROGATE = 0xD800;
+const MAX_HIGH_SURROGATE = 0xDBFF;
+const isHighSurrogate = (c: number): boolean => {
+  return (c >= MIN_HIGH_SURROGATE) && (c <= MAX_HIGH_SURROGATE);
+};
 
-  let i = 0;
-  while (i < limit) {
-    if (i == left.length) {
-      if (i == right.length) {
-        // We've exhausted both strings without finding a difference.
-        return 0;
-      } else {
-        // We've exhausted the left side but not the right. Therefore, left is
-        // less than right.
-        return -1;
-      }
-    } else if (i == right.length) {
-      // We've exhausted right but not left. Left is greater.
-      return 1;
+export const truncatedStringLength = (threshold: number) =>
+    (s: string): number => {
+  // count is the number of UTF-8 bytes required to represent the characters
+  // up to index `i` in `s`.
+  let count = 0;
+  let i;
+  // As soon as we cross the threshold, `i`, will be the index of the first
+  // character not to be included in the truncated value. This has a max value
+  // of `s.length`.
+  for (i = 0; i < s.length && count < threshold; ++i) {
+    const c = s.charCodeAt(i);
+    if (c <= 0x7F) {
+      count += 1;
+    } else if (c <= 0x7FF) {
+      count += 2;
+    } else if (isHighSurrogate(c)) {
+      // This code point is actually two UTF-16 characters, so we can skip
+      // examining the next character in the string.
+      ++i;
+      count += 4;
     } else {
-      if (left[i] < right[i]) {
-        return -1;
-      } else if (left[i] > right[i]) {
-        return 1;
-      } else {
-        // left[i] == right[i], check next character
-        i++;
-      }
+      // one character in UTF-16, but would be 3 UTF-8.
+      count += 3;
     }
   }
-  // We've exhausted the limit without finding a difference.
-  return 0;
+  return i;
 };
+
+//export const indexStringComparator =
+//  truncatedStringComparator(IndexTruncationThresholdBytes);
 
 export function primitiveComparator<T>(left: T, right: T): number {
   if (left < right) return -1;

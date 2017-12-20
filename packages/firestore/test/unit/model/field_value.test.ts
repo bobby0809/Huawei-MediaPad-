@@ -31,6 +31,7 @@ import {
   wrap,
   wrapObject
 } from '../../util/helpers';
+import {IndexTruncationThresholdBytes} from '../../../src/util/misc';
 
 describe('FieldValue', () => {
   const date1 = new Date(2016, 4, 2, 1, 5);
@@ -465,5 +466,23 @@ describe('FieldValue', () => {
         return left.compareTo(right);
       }
     );
+  });
+
+  it('truncates large string fields', () => {
+    const l = 'a'.repeat(IndexTruncationThresholdBytes);
+    const r = 'a'.repeat(IndexTruncationThresholdBytes - 1) + 'b';
+
+    const left = wrap(l);
+    const right = wrap(r);
+    // a...aa compared to a...ab, with the last character being beyond the
+    // threshold. These should compare as equal because the values are truncated
+    // at the threshold.
+    expect(left.compareTo(right)).to.equal(0);
+
+    const r2 = 'a'.repeat(IndexTruncationThresholdBytes - 2) + 'bb';
+    const right2 = wrap(r2);
+    // This time, the difference between the underlying strings is within the
+    // truncation threshold. So, left should be less than right2.
+    expect(left.compareTo(right2)).to.equal(-1);
   });
 });

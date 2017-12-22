@@ -486,7 +486,5 @@ describe('FieldValue', () => {
     expect(left.compareTo(right2)).to.equal(-1);
   });
 
-  it('truncates ref fields', () => {
-
-  });
+  it('truncates ref fields', () => {});
 });

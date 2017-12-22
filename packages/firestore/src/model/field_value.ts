@@ -487,7 +487,6 @@ export class RefValue extends FieldValue {
 
   private truncationIndex(): number {
     if (this.truncateIndex_ === -1) {
-
     }
     return this.truncateIndex_;
   }

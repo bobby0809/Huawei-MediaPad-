@@ -485,4 +485,8 @@ describe('FieldValue', () => {
     // truncation threshold. So, left should be less than right2.
     expect(left.compareTo(right2)).to.equal(-1);
   });
+
+  it('truncates ref fields', () => {
+
+  });
 });

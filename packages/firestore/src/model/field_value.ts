@@ -453,8 +453,11 @@ export class BlobValue extends FieldValue {
   }
 }
 
+// Datastore allocates 16 bytes for database id and project id.
+const RefTruncationLimit = IndexTruncationThresholdBytes - 16;
 export class RefValue extends FieldValue {
   typeOrder = TypeOrder.RefValue;
+  private truncateIndex_ = -1;
 
   constructor(readonly databaseId: DatabaseId, readonly key: DocumentKey) {
     super();
@@ -480,6 +483,13 @@ export class RefValue extends FieldValue {
       return cmp !== 0 ? cmp : DocumentKey.comparator(this.key, other.key);
     }
     return this.defaultCompareTo(other);
+  }
+
+  private truncationIndex(): number {
+    if (this.truncateIndex_ === -1) {
+
+    }
+    return this.truncateIndex_;
   }
 }
 

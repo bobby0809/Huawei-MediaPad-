@@ -16,7 +16,7 @@
 
 import { assert } from '../util/assert';
 
-import { ResourcePath } from './path';
+import { ResourcePath, TruncationIndices } from './path';
 
 export class DocumentKey {
   constructor(readonly path: ResourcePath) {
@@ -35,6 +35,11 @@ export class DocumentKey {
 
   toString(): string {
     return this.path.toString();
+  }
+
+  truncationIndices(threshold: number): TruncationIndices {
+    let count = 0;
+
   }
 
   static EMPTY = new DocumentKey(new ResourcePath([]));

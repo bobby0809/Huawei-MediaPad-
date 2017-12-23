@@ -32,7 +32,7 @@ import { SortedMap } from '../util/sorted_map';
 import * as typeUtils from '../util/types';
 
 import { DocumentKey } from './document_key';
-import { FieldPath } from './path';
+import { FieldPath, TruncationIndices } from './path';
 
 /**
  * Supported data value types:
@@ -457,7 +457,7 @@ export class BlobValue extends FieldValue {
 const RefTruncationLimit = IndexTruncationThresholdBytes - 16;
 export class RefValue extends FieldValue {
   typeOrder = TypeOrder.RefValue;
-  private truncateIndex_ = -1;
+  private truncationIndices?: TruncationIndices = null;
 
   constructor(readonly databaseId: DatabaseId, readonly key: DocumentKey) {
     super();
@@ -485,10 +485,11 @@ export class RefValue extends FieldValue {
     return this.defaultCompareTo(other);
   }
 
-  private truncationIndex(): number {
-    if (this.truncateIndex_ === -1) {
+  private truncationIndex(): TruncationIndices {
+    if (!this.truncationIndices) {
+      this.truncationIndices = this.key.truncationIndices(RefTruncationLimit);
     }
-    return this.truncateIndex_;
+    return this.truncationIndices;
   }
 }
 

@@ -16,6 +16,7 @@
 
 import { assert, fail } from '../util/assert';
 import { Code, FirestoreError } from '../util/error';
+import { truncatedStringLength } from '../util/misc';
 
 export const DOCUMENT_KEY_NAME = '__name__';
 
@@ -167,6 +168,13 @@ export abstract class Path {
   }
 }
 
+export type TruncationIndices = {
+  // Number of segments to include for truncated representation
+  segmentIndex: number;
+  // Where to cut off the last segment. -1 if not applicable.
+  stringIndex: number;
+}
+
 /**
  * A slash-separated path for navigating resources (documents and collections)
  * within Firestore.
@@ -182,6 +190,33 @@ export class ResourcePath extends Path {
 
   toString(): string {
     return this.canonicalString();
+  }
+
+  truncationIndices(threshold: number): TruncationIndices {
+    let count = 0;
+    const segments = this.toArray()
+    let i;
+    let cost;
+    for (i = 0; i < segments.length && count < threshold; ++i) {
+      // Each string segment has an overhead of 1 byte
+      count++;
+      const remaining = threshold - count;
+      const cost = truncatedStringLength(threshold)(segments[i]);
+      count += cost;
+      if (cost < remaining) {
+        // This segment was truncated.
+        return {
+          // Next segment is the first one not included
+          segmentIndex: i + 1,
+          // cutoff for this particular segment
+          stringIndex: cost
+        }
+      }
+    }
+    return {
+      segmentIndex: i,
+      stringIndex: -1
+    };
   }
 
   /**

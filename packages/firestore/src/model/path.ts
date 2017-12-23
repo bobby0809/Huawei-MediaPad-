@@ -173,7 +173,7 @@ export type TruncationIndices = {
   segmentIndex: number;
   // Where to cut off the last segment. -1 if not applicable.
   stringIndex: number;
-}
+};
 
 /**
  * A slash-separated path for navigating resources (documents and collections)
@@ -194,7 +194,7 @@ export class ResourcePath extends Path {
 
   truncationIndices(threshold: number): TruncationIndices {
     let count = 0;
-    const segments = this.toArray()
+    const segments = this.toArray();
     let i;
     let cost;
     for (i = 0; i < segments.length && count < threshold; ++i) {
@@ -210,7 +210,7 @@ export class ResourcePath extends Path {
           segmentIndex: i + 1,
           // cutoff for this particular segment
           stringIndex: cost
-        }
+        };
       }
     }
     return {

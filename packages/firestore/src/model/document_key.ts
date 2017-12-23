@@ -39,7 +39,6 @@ export class DocumentKey {
 
   truncationIndices(threshold: number): TruncationIndices {
     let count = 0;
-
   }
 
   static EMPTY = new DocumentKey(new ResourcePath([]));

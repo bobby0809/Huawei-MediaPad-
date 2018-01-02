@@ -56,6 +56,17 @@ export const truncatedStringComparator = (limit: number) => (
   const r = right.substr(0, limit);
   if (l < r) return -1;
   if (r < l) return 1;
+  // Truncated strings sort higher than equivalent, non-truncated strings.
+  // e.g. w/ limit == 2, 'abc' sorts higher than 'ab', even though truncation
+  // means comparing 'ab' to 'ab'. 'abc' and 'abd' would compare as equal.
+  if (left.length > limit) {
+    if (right.length > limit) {
+      return 0;
+    }
+    return 1;
+  } else if (right.length > limit) {
+    return -1;
+  }
   return 0;
 };
 

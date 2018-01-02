@@ -17,7 +17,7 @@
 import { expect } from 'chai';
 import {
   immediatePredecessor,
-  immediateSuccessor,
+  immediateSuccessor, truncatedStringComparator,
   truncatedStringLength
 } from '../../../src/util/misc';
 
@@ -43,15 +43,44 @@ describe('immediateSuccessor', () => {
   });
 });
 
-type TestCase = {
-  input: string;
-  threshold: number;
-  length: number;
-  output: string;
-};
 describe('truncating strings', () => {
+  it('sorts truncated higher than non-truncated', () => {
+    const limit = 2;
+    const testCases: Array<{
+      left: string,
+      right: string,
+      expected: number
+    }> = [
+      {
+        left: 'ab',
+        right: 'abc',
+        expected: -1
+      },
+      {
+        left: 'abc',
+        right: 'abd',
+        expected: 0
+      },
+      {
+        left: 'abc',
+        right: 'ab',
+        expected: 1
+      }
+    ];
+
+    const cmp = truncatedStringComparator(limit);
+    for (const { left, right, expected } of testCases) {
+      expect(cmp(left, right)).to.equal(expected, left + ' vs ' + right);
+    }
+  });
+
   it('generates the right truncation index', () => {
-    const testCases: Array<TestCase> = [
+    const testCases: Array<{
+      input: string;
+      threshold: number;
+      length: number;
+      output: string;
+    }> = [
       {
         input: 'clé',
         threshold: 4,

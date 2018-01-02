@@ -24,7 +24,6 @@ import {
   AnyJs,
   IndexTruncationThresholdBytes,
   primitiveComparator,
-  truncatedStringComparator,
   truncatedStringLength
 } from '../util/misc';
 import * as objUtils from '../util/obj';
@@ -318,10 +317,24 @@ export class StringValue extends FieldValue {
 
   compareTo(other: FieldValue): number {
     if (other instanceof StringValue) {
-      return primitiveComparator(
+      const cmp = primitiveComparator(
         this.internalValue.substr(0, this.truncationIndex()),
         other.internalValue.substr(0, other.truncationIndex())
       );
+      if (cmp === 0) {
+        if (this.truncationIndex() < this.internalValue.length) {
+          if (other.truncationIndex() < other.internalValue.length) {
+            // Both truncated to an equal string
+            return 0;
+          }
+          // This was truncated, but other was not.
+          return 1;
+        } else if (other.truncationIndex() < other.internalValue.length) {
+          // Other was truncated, but this was not.
+          return -1;
+        }
+      }
+      return cmp;
     }
     return this.defaultCompareTo(other);
   }

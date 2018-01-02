@@ -90,7 +90,6 @@ import {
 import { assert, fail } from '../../src/util/assert';
 import {
   AnyJs,
-  indexStringComparator,
   primitiveComparator
 } from '../../src/util/misc';
 import { forEach } from '../../src/util/obj';

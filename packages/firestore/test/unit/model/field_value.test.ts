@@ -468,9 +468,11 @@ describe('FieldValue', () => {
     );
   });
 
+  // One byte is reserved for string overhead, so remove it from our threshold.
+  const StringLengthThreshold = IndexTruncationThresholdBytes - 1;
   it('truncates large string fields', () => {
-    const l = 'a'.repeat(IndexTruncationThresholdBytes);
-    const r = 'a'.repeat(IndexTruncationThresholdBytes - 1) + 'b';
+    const l = 'a'.repeat(StringLengthThreshold + 1);
+    const r = 'a'.repeat(StringLengthThreshold) + 'b';
 
     const left = wrap(l);
     const right = wrap(r);
@@ -479,11 +481,21 @@ describe('FieldValue', () => {
     // at the threshold.
     expect(left.compareTo(right)).to.equal(0);
 
-    const r2 = 'a'.repeat(IndexTruncationThresholdBytes - 2) + 'bb';
+    const r2 = 'a'.repeat(StringLengthThreshold - 1) + 'bb';
     const right2 = wrap(r2);
     // This time, the difference between the underlying strings is within the
     // truncation threshold. So, left should be less than right2.
     expect(left.compareTo(right2)).to.equal(-1);
+  });
+
+  it('sorts truncated strings higher', () => {
+    const low = wrap('a'.repeat(StringLengthThreshold));
+    const high1 = wrap('a'.repeat(StringLengthThreshold + 1));
+    const high2 = wrap('a'.repeat(StringLengthThreshold) + 'b');
+
+    expect(low.compareTo(high1)).to.equal(-1);
+    expect(high1.compareTo(low)).to.equal(1);
+    expect(high1.compareTo(high2)).to.equal(0);
   });
 
   it('truncates ref fields', () => {});

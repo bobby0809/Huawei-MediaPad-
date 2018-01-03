@@ -32,9 +32,9 @@ import {
   wrapObject
 } from '../../util/helpers';
 import { IndexTruncationThresholdBytes } from '../../../src/util/misc';
-import {RefTruncationLimit} from '../../../src/model/field_value';
-import {DocumentKey} from '../../../src/model/document_key';
-import {ResourcePath} from '../../../src/model/path';
+import { RefTruncationLimit } from '../../../src/model/field_value';
+import { DocumentKey } from '../../../src/model/document_key';
+import { ResourcePath } from '../../../src/model/path';
 
 describe('FieldValue', () => {
   const date1 = new Date(2016, 4, 2, 1, 5);

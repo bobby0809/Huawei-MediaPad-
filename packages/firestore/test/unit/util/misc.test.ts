@@ -17,7 +17,8 @@
 import { expect } from 'chai';
 import {
   immediatePredecessor,
-  immediateSuccessor, truncatedStringComparator,
+  immediateSuccessor,
+  truncatedStringComparator,
   truncatedStringLength
 } from '../../../src/util/misc';
 
@@ -47,9 +48,9 @@ describe('truncating strings', () => {
   it('sorts truncated higher than non-truncated', () => {
     const limit = 2;
     const testCases: Array<{
-      left: string,
-      right: string,
-      expected: number
+      left: string;
+      right: string;
+      expected: number;
     }> = [
       {
         left: 'ab',

@@ -47,8 +47,10 @@ export class DocumentKey {
     return ResourcePath.comparator(k1.path, k2.path);
   }
 
-  static truncatedComparator(left: TruncatedPath,
-                             right: TruncatedPath): number {
+  static truncatedComparator(
+    left: TruncatedPath,
+    right: TruncatedPath
+  ): number {
     return ResourcePath.truncatedComparator(left, right);
   }
 

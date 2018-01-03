@@ -88,10 +88,7 @@ import {
   WatchChangeAggregator
 } from '../../src/remote/watch_change';
 import { assert, fail } from '../../src/util/assert';
-import {
-  AnyJs,
-  primitiveComparator
-} from '../../src/util/misc';
+import { AnyJs, primitiveComparator } from '../../src/util/misc';
 import { forEach } from '../../src/util/obj';
 import { Deferred } from '../../src/util/promise';
 import { SortedMap } from '../../src/util/sorted_map';

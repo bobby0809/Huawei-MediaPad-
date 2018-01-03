@@ -494,12 +494,12 @@ export class RefValue extends FieldValue {
     if (other instanceof RefValue) {
       const cmp = this.databaseId.compareTo(other.databaseId);
       //return cmp !== 0 ? cmp : DocumentKey.comparator(this.key, other.key);
-      return cmp !== 0 ?
-        cmp :
-        DocumentKey.truncatedComparator(
-          this.truncatedPath(),
-          other.truncatedPath()
-        );
+      return cmp !== 0
+        ? cmp
+        : DocumentKey.truncatedComparator(
+            this.truncatedPath(),
+            other.truncatedPath()
+          );
     }
     return this.defaultCompareTo(other);
   }

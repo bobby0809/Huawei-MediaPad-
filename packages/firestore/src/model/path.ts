@@ -167,8 +167,10 @@ export abstract class Path {
     return 0;
   }
 
-  static truncatedComparator(left: TruncatedPath,
-                             right: TruncatedPath): number {
+  static truncatedComparator(
+    left: TruncatedPath,
+    right: TruncatedPath
+  ): number {
     const len = Math.min(left.length, right.length);
     for (let i = 0; i < len; i++) {
       const cmp = left.compareSegment(i, right);
@@ -188,11 +190,13 @@ export abstract class Path {
 
 export class TruncatedPath {
   public readonly isTruncated;
-  constructor(private readonly basePath: Path,
-              // Number of segments to include for truncated representation
-              public readonly length: number,
-              // Where to cut off the last segment. -1 if not applicable.
-              private readonly stringIndex: number) {
+  constructor(
+    private readonly basePath: Path,
+    // Number of segments to include for truncated representation
+    public readonly length: number,
+    // Where to cut off the last segment. -1 if not applicable.
+    private readonly stringIndex: number
+  ) {
     this.isTruncated = !(basePath.length == length && stringIndex == -1);
   }
 
@@ -210,7 +214,7 @@ export class TruncatedPath {
     return 0;
   }
 
-  private truncatedSegment(i: number): { segment: string, truncated: boolean } {
+  private truncatedSegment(i: number): { segment: string; truncated: boolean } {
     const segment = this.basePath.get(i);
     if (this.stringIndex == -1 || i != this.length - 1) {
       return { segment, truncated: false };

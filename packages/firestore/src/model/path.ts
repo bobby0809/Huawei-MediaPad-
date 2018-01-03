@@ -166,14 +166,61 @@ export abstract class Path {
     if (p1.length > p2.length) return 1;
     return 0;
   }
+
+  static truncatedComparator(left: TruncatedPath,
+                             right: TruncatedPath): number {
+    const len = Math.min(left.length, right.length);
+    for (let i = 0; i < len; i++) {
+      const cmp = left.compareSegment(i, right);
+      if (cmp != 0) return cmp;
+    }
+    if (left.length < right.length) return -1;
+    if (left.length > right.length) return 1;
+    if (left.isTruncated) {
+      if (right.isTruncated) return 0;
+      return 1;
+    } else if (right.isTruncated) {
+      return -1;
+    }
+    return 0;
+  }
 }
 
-export type TruncationIndices = {
-  // Number of segments to include for truncated representation
-  segmentIndex: number;
-  // Where to cut off the last segment. -1 if not applicable.
-  stringIndex: number;
-};
+export class TruncatedPath {
+  public readonly isTruncated;
+  constructor(private readonly basePath: Path,
+              // Number of segments to include for truncated representation
+              public readonly length: number,
+              // Where to cut off the last segment. -1 if not applicable.
+              private readonly stringIndex: number) {
+    this.isTruncated = !(basePath.length == length && stringIndex == -1);
+  }
+
+  compareSegment(i: number, other: TruncatedPath): number {
+    const l = this.truncatedSegment(i);
+    const r = other.truncatedSegment(i);
+    if (l.segment < r.segment) return -1;
+    if (l.segment > r.segment) return 1;
+    if (l.truncated) {
+      if (r.truncated) return 0;
+      return 1;
+    } else if (r.truncated) {
+      return -1;
+    }
+    return 0;
+  }
+
+  private truncatedSegment(i: number): { segment: string, truncated: boolean } {
+    const segment = this.basePath.get(i);
+    if (this.stringIndex == -1 || i != this.length - 1) {
+      return { segment, truncated: false };
+    }
+    return {
+      segment: segment.substr(0, this.stringIndex),
+      truncated: true
+    };
+  }
+}
 
 /**
  * A slash-separated path for navigating resources (documents and collections)
@@ -192,31 +239,36 @@ export class ResourcePath extends Path {
     return this.canonicalString();
   }
 
-  truncationIndices(threshold: number): TruncationIndices {
+  truncatedPath(threshold: number): TruncatedPath {
     let count = 0;
     const segments = this.toArray();
     let i;
-    let cost;
     for (i = 0; i < segments.length && count < threshold; ++i) {
       // Each string segment has an overhead of 1 byte
       count++;
       const remaining = threshold - count;
-      const cost = truncatedStringLength(threshold)(segments[i]);
+      const cost = truncatedStringLength(remaining)(segments[i]);
       count += cost;
-      if (cost < remaining) {
-        // This segment was truncated.
-        return {
+      const segmentIsTruncated = cost < segments[i].length;
+      const isLastSegment = i + 1 === segments.length;
+      const thresholdExhausted = cost >= remaining;
+      // If we have exhausted the remaining threshold AND we've either truncated
+      // this segment or there are more segments to examine, we consider this
+      // Path truncated. On the other hand, even if we've exhausted our
+      // allotment, if we didn't truncate this segment and there are no more
+      // segments, do not consider this Path truncated.
+      if (thresholdExhausted && (segmentIsTruncated || !isLastSegment)) {
+        return new TruncatedPath(
+          this,
           // Next segment is the first one not included
-          segmentIndex: i + 1,
+          i + 1,
           // cutoff for this particular segment
-          stringIndex: cost
-        };
+          cost
+        );
       }
     }
-    return {
-      segmentIndex: i,
-      stringIndex: -1
-    };
+    // assert: i == segments.length
+    return new TruncatedPath(this, i, -1);
   }
 
   /**

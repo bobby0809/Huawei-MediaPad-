@@ -32,6 +32,9 @@ import {
   wrapObject
 } from '../../util/helpers';
 import { IndexTruncationThresholdBytes } from '../../../src/util/misc';
+import {RefTruncationLimit} from '../../../src/model/field_value';
+import {DocumentKey} from '../../../src/model/document_key';
+import {ResourcePath} from '../../../src/model/path';
 
 describe('FieldValue', () => {
   const date1 = new Date(2016, 4, 2, 1, 5);
@@ -498,5 +501,22 @@ describe('FieldValue', () => {
     expect(high1.compareTo(high2)).to.equal(0);
   });
 
-  it('truncates ref fields', () => {});
+  it('truncates ref fields', () => {
+    // Database IDs are not truncated and allotted a constant amount of space.
+    // So, we can ignore them for testing truncation support by using the same
+    // value for all of the test cases.
+    const databaseId = dbId('p1', 'd1');
+    const path = (parts: Array<string>): DocumentKey => {
+      return new DocumentKey(new ResourcePath(parts));
+    };
+    const keyPart1 = 'a'.repeat(RefTruncationLimit - 1);
+    const keyPart2 = 'b';
+    const lowKey = path([keyPart1, keyPart2]);
+    const low = new fieldValue.RefValue(databaseId, lowKey);
+    // Include one extra segment
+    const highKey1 = path([keyPart1, 'bb']);
+    const high1 = new fieldValue.RefValue(databaseId, highKey1);
+    expect(low.compareTo(high1)).to.equal(-1);
+    //[new fieldValue.RefValue(dbId('p1', 'd1'), key('c1/doc1'))],
+  });
 });

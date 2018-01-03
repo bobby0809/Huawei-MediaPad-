@@ -31,7 +31,7 @@ import { SortedMap } from '../util/sorted_map';
 import * as typeUtils from '../util/types';
 
 import { DocumentKey } from './document_key';
-import { FieldPath, TruncationIndices } from './path';
+import { FieldPath, TruncatedPath } from './path';
 
 /**
  * Supported data value types:
@@ -467,10 +467,10 @@ export class BlobValue extends FieldValue {
 }
 
 // Datastore allocates 16 bytes for database id and project id.
-const RefTruncationLimit = IndexTruncationThresholdBytes - 16;
+export const RefTruncationLimit = IndexTruncationThresholdBytes - 16;
 export class RefValue extends FieldValue {
   typeOrder = TypeOrder.RefValue;
-  private truncationIndices?: TruncationIndices = null;
+  private truncatedPath_?: TruncatedPath = null;
 
   constructor(readonly databaseId: DatabaseId, readonly key: DocumentKey) {
     super();
@@ -493,16 +493,22 @@ export class RefValue extends FieldValue {
   compareTo(other: FieldValue): number {
     if (other instanceof RefValue) {
       const cmp = this.databaseId.compareTo(other.databaseId);
-      return cmp !== 0 ? cmp : DocumentKey.comparator(this.key, other.key);
+      //return cmp !== 0 ? cmp : DocumentKey.comparator(this.key, other.key);
+      return cmp !== 0 ?
+        cmp :
+        DocumentKey.truncatedComparator(
+          this.truncatedPath(),
+          other.truncatedPath()
+        );
     }
     return this.defaultCompareTo(other);
   }
 
-  private truncationIndex(): TruncationIndices {
-    if (!this.truncationIndices) {
-      this.truncationIndices = this.key.truncationIndices(RefTruncationLimit);
+  private truncatedPath(): TruncatedPath {
+    if (!this.truncatedPath_) {
+      this.truncatedPath_ = this.key.truncatedPath(RefTruncationLimit);
     }
-    return this.truncationIndices;
+    return this.truncatedPath_;
   }
 }
 

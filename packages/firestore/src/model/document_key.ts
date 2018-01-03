@@ -16,7 +16,7 @@
 
 import { assert } from '../util/assert';
 
-import { ResourcePath, TruncationIndices } from './path';
+import { ResourcePath, TruncatedPath } from './path';
 
 export class DocumentKey {
   constructor(readonly path: ResourcePath) {
@@ -37,15 +37,19 @@ export class DocumentKey {
     return this.path.toString();
   }
 
-  truncationIndices(threshold: number): TruncationIndices {
-    let count = 0;
-    return null;
+  truncatedPath(threshold: number): TruncatedPath {
+    return this.path.truncatedPath(threshold);
   }
 
   static EMPTY = new DocumentKey(new ResourcePath([]));
 
   static comparator(k1: DocumentKey, k2: DocumentKey): number {
     return ResourcePath.comparator(k1.path, k2.path);
+  }
+
+  static truncatedComparator(left: TruncatedPath,
+                             right: TruncatedPath): number {
+    return ResourcePath.truncatedComparator(left, right);
   }
 
   static isDocumentKey(path: ResourcePath): boolean {
@@ -55,7 +59,7 @@ export class DocumentKey {
   /**
    * Creates and returns a new document key with the given segments.
    *
-   * @param path The segments of the path to the document
+   * @param segments The segments of the path to the document
    * @return A new instance of DocumentKey
    */
   static fromSegments(segments: string[]): DocumentKey {

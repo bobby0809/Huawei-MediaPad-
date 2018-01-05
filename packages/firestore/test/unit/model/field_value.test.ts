@@ -522,4 +522,38 @@ describe('FieldValue', () => {
     expect(high1.compareTo(high2)).to.equal(0);
     //[new fieldValue.RefValue(dbId('p1', 'd1'), key('c1/doc1'))],
   });
+
+  it('truncates object fields', () => {
+    // 3 bytes. 1 for each string overhead. 1 for the string itself.
+    const lowKey = 'a'.repeat(IndexTruncationThresholdBytes - 3);
+    const low = wrap({
+      [lowKey]: 'b'
+    });
+    //console.log('low size', low.byteSize());
+    const high1 = wrap({
+      [lowKey]: 'bb'
+    });
+    expect(low.compareTo(high1)).to.equal(-1);
+    const high2 = wrap({
+      [lowKey]: 'ba'
+    });
+    expect(high1.compareTo(high2)).to.equal(0);
+
+    // 4 bytes for first key-value pair
+    const multiKey = 'a'.repeat(IndexTruncationThresholdBytes - 7);
+    const multiKeyLow = wrap({
+      'a': 'b',
+      [multiKey]: 'c'
+    });
+    const multiKeyHigh1 = wrap({
+      'a': 'b',
+      [multiKey]: 'ca'
+    });
+    expect(multiKeyLow.compareTo(multiKeyHigh1)).to.equal(-1);
+    const multiKeyHigh2 = wrap({
+      'a': 'b',
+      [multiKey]: 'cb'
+    });
+    expect(multiKeyHigh1.compareTo(multiKeyHigh2)).to.equal(0);
+  });
 });

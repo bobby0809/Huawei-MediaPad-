@@ -349,16 +349,16 @@ function stringCompare(bytesRemaining: number, left: string, right: string): Siz
     if (leftIsTruncated) {
       if (rightIsTruncated) {
         // Both truncated to an equal string
-        return { cmp, bytes: leftIndex.bytes };
+        return { cmp, bytes: leftIndex.bytes + 1 };
       }
       // Left was truncated, but right was not.
-      return { cmp: 1, bytes: rightIndex.bytes };
+      return { cmp: 1, bytes: rightIndex.bytes + 1 };
     } else if (rightIsTruncated) {
       // Right was truncated, but left was not.
-      return { cmp: -1, bytes: leftIndex.bytes };
+      return { cmp: -1, bytes: leftIndex.bytes + 1 };
     }
   }
-  return { cmp, bytes: leftIndex.bytes };
+  return { cmp, bytes: leftIndex.bytes + 1 };
 }
 
 // TODO(b/37267885): Add truncation support
@@ -675,7 +675,7 @@ export class ObjectValue extends FieldValue {
   }
 
   byteSize(): number {
-    throw new Error('unimplemented');
+    throw new Error('size unimplemented');
   }
 
   compare(other: FieldValue, bytesRemaining: number): SizedComparison {
@@ -683,35 +683,34 @@ export class ObjectValue extends FieldValue {
       const it1 = this.internalValue.getIterator();
       const it2 = other.internalValue.getIterator();
       let remaining = bytesRemaining;
-      while (it1.hasNext() && it2.hasNext()) {
+      while (it1.hasNext() && it2.hasNext() && remaining >= 0) {
         const next1: { key: string; value: FieldValue } = it1.getNext();
         const next2: { key: string; value: FieldValue } = it2.getNext();
         const keyCmp = stringCompare(remaining, next1.key, next2.key);
+        // account for key bytes used
+        remaining -= keyCmp.bytes;
         if (keyCmp.cmp) {
           // We have an answer, but we need the byte size.
-          throw new Error('unimplemented');
+          throw new Error('key cmp unimplemented');
           //return keyCmp;
         } else {
-          // get number of bytes used. Can use either key, should be equivalent
-          const cost = truncatedStringLength(remaining)(next1.key);
-          const valueBytesRemaining = remaining - cost.bytes;
-          const cmp = next1.value.compare(next2.value, valueBytesRemaining);
+          const cmp = next1.value.compare(next2.value, remaining);
+          // account for however much value we consumed
           remaining -= cmp.bytes;
-          if (cmp) {
+          if (cmp.cmp) {
+            // found a difference. Tally up how many bytes have been used.
             const bytes = bytesRemaining - remaining;
+            return {
+              cmp: cmp.cmp,
+              bytes
+            };
           }
         }
-        const cmp =
-          primitiveComparator(next1.key, next2.key) ||
-          next1.value.compareTo(next2.value);
-        if (cmp) {
-          throw new Error('unimplemented');
-          //return cmp;
-        }
       }
-      throw new Error('unimplemented');
-      // Only equal if both iterators are exhausted
-      //return primitiveComparator(it1.hasNext(), it2.hasNext());
+      return {
+        cmp: 0,
+        bytes: bytesRemaining - remaining
+      };
     } else {
       return this.defaultCompare(other);
     }

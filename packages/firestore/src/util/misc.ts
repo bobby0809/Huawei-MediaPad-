@@ -83,7 +83,7 @@ export const truncatedStringLength = (threshold: number) => (
   // count is the number of UTF-8 bytes required to represent the characters
   // up to index `i` in `s`.
   let count = 0;
-  let i;
+  let i = 0;
   // As soon as we cross the threshold, `i`, will be the index of the first
   // character not to be included in the truncated value. This has a max value
   // of `s.length`.

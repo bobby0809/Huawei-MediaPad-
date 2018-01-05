@@ -113,8 +113,8 @@ export type FieldType = null | boolean | number | string | {};
 
 export type SizedComparison = {
   cmp: number;
-  bytes: number;  // byte size of the smaller value
-}
+  bytes: number; // byte size of the smaller value
+};
 
 /**
  * A field value represents a datatype as stored by Firestore.
@@ -215,7 +215,7 @@ export class BooleanValue extends FieldValue {
 
   compare(other: FieldValue, bytesRemaining: number): SizedComparison {
     if (other instanceof BooleanValue) {
-      return { 
+      return {
         cmp: primitiveComparator(this, other),
         bytes: this.byteSize()
       };
@@ -256,7 +256,7 @@ export abstract class NumberValue extends FieldValue {
       return {
         cmp: numericComparator(this.internalValue, other.internalValue),
         bytes: this.byteSize()
-      }
+      };
     }
     return this.defaultCompare(other, bytesRemaining);
   }
@@ -349,7 +349,11 @@ export class DoubleValue extends NumberValue {
 const StringUTF8ByteThreshold = IndexTruncationThresholdBytes - 1;
 const stringTruncationIndex = truncatedStringLength(StringUTF8ByteThreshold);
 
-function stringCompare(bytesRemaining: number, left: string, right: string): SizedComparison {
+function stringCompare(
+  bytesRemaining: number,
+  left: string,
+  right: string
+): SizedComparison {
   // subtract one for string overhead.
   const truncationIndex = truncatedStringLength(bytesRemaining - 1);
   const leftIndex = truncationIndex(left);
@@ -397,7 +401,11 @@ export class StringValue extends FieldValue {
 
   compare(other: FieldValue, bytesRemaining: number): SizedComparison {
     if (other instanceof StringValue) {
-      return stringCompare(bytesRemaining, this.internalValue, other.internalValue);
+      return stringCompare(
+        bytesRemaining,
+        this.internalValue,
+        other.internalValue
+      );
     }
     return this.defaultCompare(other, bytesRemaining);
   }
@@ -438,7 +446,7 @@ export class TimestampValue extends FieldValue {
 
   compare(other: FieldValue, bytesRemaining: number): SizedComparison {
     if (other instanceof TimestampValue) {
-      return { 
+      return {
         cmp: this.internalValue.compareTo(other.internalValue),
         bytes: this.byteSize()
       };
@@ -508,7 +516,7 @@ export class ServerTimestampValue extends FieldValue {
 
   compare(other: FieldValue, bytesRemaining: number): SizedComparison {
     if (other instanceof ServerTimestampValue) {
-      return { 
+      return {
         cmp: this.localWriteTime.compareTo(other.localWriteTime),
         bytes: this.byteSize()
       };
@@ -554,8 +562,8 @@ export class BlobValue extends FieldValue {
   compare(other: FieldValue, bytesRemaining): SizedComparison {
     if (other instanceof BlobValue) {
       const cmp = this.internalValue._compareTo(other.internalValue);
-      return { 
-        cmp, 
+      return {
+        cmp,
         bytes: cmp <= 0 ? this.byteSize() : other.byteSize()
       };
     }
@@ -607,9 +615,10 @@ export class RefValue extends FieldValue {
       if (cmp) {
         return {
           cmp,
-          bytes: cmp < 0 ? 
-            this.key.truncatedPath(pathRemaining).byteLength
-            : other.key.truncatedPath(pathRemaining).byteLength
+          bytes:
+            cmp < 0
+              ? this.key.truncatedPath(pathRemaining).byteLength
+              : other.key.truncatedPath(pathRemaining).byteLength
         };
       }
       const thisPath = this.key.truncatedPath(pathRemaining);

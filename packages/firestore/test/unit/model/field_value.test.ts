@@ -544,16 +544,16 @@ describe('FieldValue', () => {
     // 4 bytes for first key-value pair
     const multiKey = 'a'.repeat(IndexTruncationThresholdBytes - 7);
     const multiKeyLow = wrap({
-      'a': 'b',
+      a: 'b',
       [multiKey]: 'c'
     });
     const multiKeyHigh1 = wrap({
-      'a': 'b',
+      a: 'b',
       [multiKey]: 'ca'
     });
     expect(multiKeyLow.compareTo(multiKeyHigh1)).to.equal(-1);
     const multiKeyHigh2 = wrap({
-      'a': 'b',
+      a: 'b',
       [multiKey]: 'cb'
     });
     expect(multiKeyHigh1.compareTo(multiKeyHigh2)).to.equal(0);
@@ -570,34 +570,34 @@ describe('FieldValue', () => {
 
     // Handles mismatched keys
     const a = wrap({
-      'a': 'b'
+      a: 'b'
     });
     const b = wrap({
-      'b': 'c'
+      b: 'c'
     });
     expect(a.compareTo(b)).to.equal(-1);
 
     const nested1 = wrap({
-      'a': {
-        'b': 'c'
+      a: {
+        b: 'c'
       }
     });
     const nested2 = wrap({
-      'a': {
-        'b': 'd'
+      a: {
+        b: 'd'
       }
     });
     expect(nested1.compareTo(nested2)).to.equal(-1);
-    
+
     // truncate after first character of nested value
     const longNestedKey = 'a'.repeat(IndexTruncationThresholdBytes - 5);
     const longNested1 = wrap({
-      'a': {
+      a: {
         [longNestedKey]: 'aa'
       }
     });
     const longNested2 = wrap({
-      'a': {
+      a: {
         [longNestedKey]: 'ab'
       }
     });
@@ -606,25 +606,25 @@ describe('FieldValue', () => {
     const longNestedKey2 = 'a'.repeat(IndexTruncationThresholdBytes - 2);
     const longNestedKey3 = 'a'.repeat(IndexTruncationThresholdBytes - 3) + 'b';
     const longNested3 = wrap({
-      'a': {
+      a: {
         [longNestedKey2]: 'a'
       }
     });
     const longNested4 = wrap({
-      'a': {
+      a: {
         [longNestedKey3]: 'a'
       }
     });
     expect(longNested3.compareTo(longNested4)).to.equal(0);
 
     const nestedLow = wrap({
-      'a': {
-        'b': 'c'
+      a: {
+        b: 'c'
       }
     });
     const nestedHigh = wrap({
-      'b': {
-        'b': 'c'
+      b: {
+        b: 'c'
       }
     });
     expect(nestedLow.compareTo(nestedHigh)).to.equal(-1);

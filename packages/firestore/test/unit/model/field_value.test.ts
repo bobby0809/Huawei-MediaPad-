@@ -524,6 +524,8 @@ describe('FieldValue', () => {
   });
 
   it('truncates object fields', () => {
+    // TODO: split this out
+
     // 3 bytes. 1 for each string overhead. 1 for the string itself.
     const lowKey = 'a'.repeat(IndexTruncationThresholdBytes - 3);
     const low = wrap({
@@ -555,5 +557,76 @@ describe('FieldValue', () => {
       [multiKey]: 'cb'
     });
     expect(multiKeyHigh1.compareTo(multiKeyHigh2)).to.equal(0);
+
+    const longKey1 = 'a'.repeat(IndexTruncationThresholdBytes);
+    const long1 = wrap({
+      [longKey1]: 'a'
+    });
+    const longKey2 = 'a'.repeat(IndexTruncationThresholdBytes - 1) + 'b';
+    const long2 = wrap({
+      [longKey2]: 'a'
+    });
+    expect(long1.compareTo(long2)).to.equal(0);
+
+    // Handles mismatched keys
+    const a = wrap({
+      'a': 'b'
+    });
+    const b = wrap({
+      'b': 'c'
+    });
+    expect(a.compareTo(b)).to.equal(-1);
+
+    const nested1 = wrap({
+      'a': {
+        'b': 'c'
+      }
+    });
+    const nested2 = wrap({
+      'a': {
+        'b': 'd'
+      }
+    });
+    expect(nested1.compareTo(nested2)).to.equal(-1);
+    
+    // truncate after first character of nested value
+    const longNestedKey = 'a'.repeat(IndexTruncationThresholdBytes - 5);
+    const longNested1 = wrap({
+      'a': {
+        [longNestedKey]: 'aa'
+      }
+    });
+    const longNested2 = wrap({
+      'a': {
+        [longNestedKey]: 'ab'
+      }
+    });
+    expect(longNested1.compareTo(longNested2)).to.equal(0);
+
+    const longNestedKey2 = 'a'.repeat(IndexTruncationThresholdBytes - 2);
+    const longNestedKey3 = 'a'.repeat(IndexTruncationThresholdBytes - 3) + 'b';
+    const longNested3 = wrap({
+      'a': {
+        [longNestedKey2]: 'a'
+      }
+    });
+    const longNested4 = wrap({
+      'a': {
+        [longNestedKey3]: 'a'
+      }
+    });
+    expect(longNested3.compareTo(longNested4)).to.equal(0);
+
+    const nestedLow = wrap({
+      'a': {
+        'b': 'c'
+      }
+    });
+    const nestedHigh = wrap({
+      'b': {
+        'b': 'c'
+      }
+    });
+    expect(nestedLow.compareTo(nestedHigh)).to.equal(-1);
   });
 });

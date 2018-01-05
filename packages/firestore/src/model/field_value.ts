@@ -122,7 +122,9 @@ export type SizedComparison = {
 export abstract class FieldValue {
   readonly typeOrder: TypeOrder;
 
+  // TODO: can get rid of this?
   abstract byteSize(): number;
+  abstract truncatedSize(bytesRemaining: number): number;
   abstract value(options?: FieldValueOptions): FieldType;
   abstract equals(other: FieldValue): boolean;
   abstract compare(other: FieldValue, bytesRemaining: number): SizedComparison;
@@ -132,12 +134,12 @@ export abstract class FieldValue {
     return val === null ? 'null' : val.toString();
   }
 
-  defaultCompare(other: FieldValue): SizedComparison {
+  defaultCompare(other: FieldValue, bytesRemaining: number): SizedComparison {
     const cmp = this.defaultCompareTo(other);
     if (cmp <= 0) {
-      return { cmp, bytes: this.byteSize() };
+      return { cmp, bytes: this.truncatedSize(bytesRemaining) };
     } else {
-      return { cmp, bytes: other.byteSize() };
+      return { cmp, bytes: other.truncatedSize(bytesRemaining) };
     }
   }
 
@@ -178,10 +180,15 @@ export class NullValue extends FieldValue {
     if (other instanceof NullValue) {
       return { cmp: 0, bytes: this.byteSize() };
     }
-    return this.defaultCompare(other);
+    return this.defaultCompare(other, bytesRemaining);
   }
 
   byteSize(): number {
+    return 1;
+  }
+
+  truncatedSize(bytesRemaining: number): number {
+    // not truncatable.
     return 1;
   }
 
@@ -213,10 +220,14 @@ export class BooleanValue extends FieldValue {
         bytes: this.byteSize()
       };
     }
-    return this.defaultCompare(other);
+    return this.defaultCompare(other, bytesRemaining);
   }
 
   byteSize(): number {
+    return 1;
+  }
+
+  truncatedSize(bytesRemaining: number): number {
     return 1;
   }
 
@@ -247,10 +258,14 @@ export abstract class NumberValue extends FieldValue {
         bytes: this.byteSize()
       }
     }
-    return this.defaultCompare(other);
+    return this.defaultCompare(other, bytesRemaining);
   }
 
   byteSize(): number {
+    return 8;
+  }
+
+  truncatedSize(bytesRemaining: number): number {
     return 8;
   }
 }
@@ -384,11 +399,15 @@ export class StringValue extends FieldValue {
     if (other instanceof StringValue) {
       return stringCompare(bytesRemaining, this.internalValue, other.internalValue);
     }
-    return this.defaultCompare(other);
+    return this.defaultCompare(other, bytesRemaining);
   }
 
   byteSize(): number {
     return this.truncationIndex().bytes;
+  }
+
+  truncatedSize(bytesRemaining: number): number {
+    return truncatedStringLength(bytesRemaining)(this.internalValue).bytes;
   }
 
   private truncationIndex(): TruncatedStringLength {
@@ -417,7 +436,7 @@ export class TimestampValue extends FieldValue {
     );
   }
 
-  compare(other: FieldValue): SizedComparison {
+  compare(other: FieldValue, bytesRemaining: number): SizedComparison {
     if (other instanceof TimestampValue) {
       return { 
         cmp: this.internalValue.compareTo(other.internalValue),
@@ -427,11 +446,15 @@ export class TimestampValue extends FieldValue {
       // Concrete timestamps come before server timestamps.
       return { cmp: -1, bytes: this.byteSize() };
     } else {
-      return this.defaultCompare(other);
+      return this.defaultCompare(other, bytesRemaining);
     }
   }
 
   byteSize(): number {
+    return 8;
+  }
+
+  truncatedSize(bytesRemaining: number): number {
     return 8;
   }
 }
@@ -483,7 +506,7 @@ export class ServerTimestampValue extends FieldValue {
     );
   }
 
-  compare(other: FieldValue): SizedComparison {
+  compare(other: FieldValue, bytesRemaining: number): SizedComparison {
     if (other instanceof ServerTimestampValue) {
       return { 
         cmp: this.localWriteTime.compareTo(other.localWriteTime),
@@ -493,7 +516,7 @@ export class ServerTimestampValue extends FieldValue {
       // Server timestamps come after all concrete timestamps.
       return { cmp: 1, bytes: other.byteSize() };
     } else {
-      return this.defaultCompare(other);
+      return this.defaultCompare(other, bytesRemaining);
     }
   }
 
@@ -502,6 +525,10 @@ export class ServerTimestampValue extends FieldValue {
   }
 
   byteSize() {
+    return 8;
+  }
+
+  truncatedSize(bytesRemaining: number): number {
     return 8;
   }
 }
@@ -524,7 +551,7 @@ export class BlobValue extends FieldValue {
     );
   }
 
-  compare(other: FieldValue): SizedComparison {
+  compare(other: FieldValue, bytesRemaining): SizedComparison {
     if (other instanceof BlobValue) {
       const cmp = this.internalValue._compareTo(other.internalValue);
       return { 
@@ -532,11 +559,15 @@ export class BlobValue extends FieldValue {
         bytes: cmp <= 0 ? this.byteSize() : other.byteSize()
       };
     }
-    return this.defaultCompare(other);
+    return this.defaultCompare(other, bytesRemaining);
   }
 
   byteSize(): number {
     return Math.min(this.internalValue.size(), IndexTruncationThresholdBytes);
+  }
+
+  truncatedSize(bytesRemaining: number): number {
+    return Math.min(this.internalValue.size(), bytesRemaining);
   }
 }
 
@@ -589,11 +620,15 @@ export class RefValue extends FieldValue {
         bytes: pathCmp <= 0 ? thisPath.byteLength : otherPath.byteLength
       };
     }
-    return this.defaultCompare(other);
+    return this.defaultCompare(other, bytesRemaining);
   }
 
   byteSize(): number {
     return this.truncatedPath().length;
+  }
+
+  truncatedSize(bytesRemaining: number): number {
+    return 16 + this.key.truncatedPath(bytesRemaining - 16).byteLength;
   }
 
   private truncatedPath(): TruncatedPath {
@@ -622,17 +657,21 @@ export class GeoPointValue extends FieldValue {
     );
   }
 
-  compare(other: FieldValue): SizedComparison {
+  compare(other: FieldValue, bytesRemaining: number): SizedComparison {
     if (other instanceof GeoPointValue) {
       return {
         cmp: this.internalValue._compareTo(other.internalValue),
-        bytes: this.byteSize()
+        bytes: this.truncatedSize(bytesRemaining)
       };
     }
-    return this.defaultCompare(other);
+    return this.defaultCompare(other, bytesRemaining);
   }
 
   byteSize(): number {
+    return 16;
+  }
+
+  truncatedSize(bytesRemaining: number): number {
     return 16;
   }
 }
@@ -678,6 +717,22 @@ export class ObjectValue extends FieldValue {
     throw new Error('size unimplemented');
   }
 
+  truncatedSize(bytesRemaining: number): number {
+    let remaining = bytesRemaining;
+    const it = this.internalValue.getIterator();
+    while (remaining > 0 && it.hasNext()) {
+      const { key, value } = it.getNext();
+      remaining--; // account for string overhead
+      remaining -= truncatedStringLength(remaining)(key).bytes;
+      if (remaining > 0) {
+        remaining -= value.truncatedSize(remaining);
+      }
+    }
+    // remaining *may* be negative. If we hit something untruncatable,
+    // we may take a few more bytes than allowed.
+    return bytesRemaining - remaining;
+  }
+
   compare(other: FieldValue, bytesRemaining: number): SizedComparison {
     if (other instanceof ObjectValue) {
       const it1 = this.internalValue.getIterator();
@@ -691,8 +746,12 @@ export class ObjectValue extends FieldValue {
         remaining -= keyCmp.bytes;
         if (keyCmp.cmp) {
           // We have an answer, but we need the byte size.
-          throw new Error('key cmp unimplemented');
-          //return keyCmp;
+          const lowValue = keyCmp.cmp < 0 ? next1.value : next2.value;
+          remaining -= lowValue.truncatedSize(remaining);
+          return {
+            cmp: keyCmp.cmp,
+            bytes: bytesRemaining - remaining
+          };
         } else {
           const cmp = next1.value.compare(next2.value, remaining);
           // account for however much value we consumed
@@ -712,7 +771,7 @@ export class ObjectValue extends FieldValue {
         bytes: bytesRemaining - remaining
       };
     } else {
-      return this.defaultCompare(other);
+      return this.defaultCompare(other, bytesRemaining);
     }
   }
 
@@ -823,7 +882,11 @@ export class ArrayValue extends FieldValue {
     throw new Error('unimplemented');
   }
 
-  compare(other: FieldValue): SizedComparison {
+  truncatedSize(bytesRemaining: number): number {
+    throw new Error('array truncated unimplemented');
+  }
+
+  compare(other: FieldValue, bytesRemaining: number): SizedComparison {
     if (other instanceof ArrayValue) {
       const minLength = Math.min(
         this.internalValue.length,

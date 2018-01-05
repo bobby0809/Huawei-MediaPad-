@@ -509,7 +509,7 @@ describe('FieldValue', () => {
     const path = (parts: Array<string>): DocumentKey => {
       return new DocumentKey(new ResourcePath(parts));
     };
-    const keyPart1 = 'a'.repeat(RefTruncationLimit - 1);
+    const keyPart1 = 'a'.repeat(RefTruncationLimit - 3);
     const keyPart2 = 'b';
     const lowKey = path([keyPart1, keyPart2]);
     const low = new fieldValue.RefValue(databaseId, lowKey);
@@ -517,6 +517,9 @@ describe('FieldValue', () => {
     const highKey1 = path([keyPart1, 'bb']);
     const high1 = new fieldValue.RefValue(databaseId, highKey1);
     expect(low.compareTo(high1)).to.equal(-1);
+    const highKey2 = path([keyPart1, 'ba']);
+    const high2 = new fieldValue.RefValue(databaseId, highKey2);
+    expect(high1.compareTo(high2)).to.equal(0);
     //[new fieldValue.RefValue(dbId('p1', 'd1'), key('c1/doc1'))],
   });
 });

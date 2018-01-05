@@ -76,9 +76,10 @@ const isHighSurrogate = (c: number): boolean => {
   return c >= MIN_HIGH_SURROGATE && c <= MAX_HIGH_SURROGATE;
 };
 
+export type TruncatedStringLength = {bytes: number, index: number};
 export const truncatedStringLength = (threshold: number) => (
   s: string
-): number => {
+): TruncatedStringLength => {
   // count is the number of UTF-8 bytes required to represent the characters
   // up to index `i` in `s`.
   let count = 0;
@@ -102,7 +103,7 @@ export const truncatedStringLength = (threshold: number) => (
       count += 3;
     }
   }
-  return i;
+  return {bytes: count, index: i};
 };
 
 //export const indexStringComparator =

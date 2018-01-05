@@ -179,9 +179,11 @@ export abstract class Path {
     if (left.length < right.length) return -1;
     if (left.length > right.length) return 1;
     if (left.isTruncated) {
+      console.log('left', right.isTruncated);
       if (right.isTruncated) return 0;
       return 1;
     } else if (right.isTruncated) {
+      console.log('right');
       return -1;
     }
     return 0;
@@ -195,9 +197,11 @@ export class TruncatedPath {
     // Number of segments to include for truncated representation
     public readonly length: number,
     // Where to cut off the last segment. -1 if not applicable.
-    private readonly stringIndex: number
+    private readonly stringIndex: number,
+    public readonly byteLength: number
   ) {
     this.isTruncated = !(basePath.length == length && stringIndex == -1);
+    //console.log(this.length, this.stringIndex, this.isTruncated);
   }
 
   compareSegment(i: number, other: TruncatedPath): number {
@@ -252,10 +256,10 @@ export class ResourcePath extends Path {
       count++;
       const remaining = threshold - count;
       const cost = truncatedStringLength(remaining)(segments[i]);
-      count += cost;
-      const segmentIsTruncated = cost < segments[i].length;
+      count += cost.bytes;
+      const segmentIsTruncated = cost.index < segments[i].length;
       const isLastSegment = i + 1 === segments.length;
-      const thresholdExhausted = cost >= remaining;
+      const thresholdExhausted = cost.bytes >= remaining;
       // If we have exhausted the remaining threshold AND we've either truncated
       // this segment or there are more segments to examine, we consider this
       // Path truncated. On the other hand, even if we've exhausted our
@@ -267,12 +271,14 @@ export class ResourcePath extends Path {
           // Next segment is the first one not included
           i + 1,
           // cutoff for this particular segment
-          cost
+          cost.index,
+          count
         );
       }
     }
+    //console.log(count);
     // assert: i == segments.length
-    return new TruncatedPath(this, i, -1);
+    return new TruncatedPath(this, i, -1, count);
   }
 
   /**

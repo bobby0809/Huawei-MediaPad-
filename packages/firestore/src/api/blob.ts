@@ -118,6 +118,10 @@ export class Blob {
     return buffer;
   }
 
+  public size(): number {
+    return this._binaryString.length;
+  }
+
   public toString(): string {
     return 'Blob(base64: ' + this.toBase64() + ')';
   }

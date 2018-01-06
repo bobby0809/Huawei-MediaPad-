@@ -538,9 +538,10 @@ export class BlobValue extends FieldValue {
       const cmp = this.internalValue._compareTo(other.internalValue);
       return {
         cmp,
-        bytes: cmp <= 0 
-               ? this.truncatedSize(bytesRemaining) 
-               : other.truncatedSize(bytesRemaining)
+        bytes:
+          cmp <= 0
+            ? this.truncatedSize(bytesRemaining)
+            : other.truncatedSize(bytesRemaining)
       };
     }
     return this.defaultCompare(other, bytesRemaining);
@@ -877,7 +878,10 @@ export class ArrayValue extends FieldValue {
 
       let remaining = bytesRemaining;
       for (let i = 0; i < minLength && remaining > 0; i++) {
-        const cmp = this.internalValue[i].compare(other.internalValue[i], remaining);
+        const cmp = this.internalValue[i].compare(
+          other.internalValue[i],
+          remaining
+        );
         if (cmp.cmp) {
           const value = cmp.cmp < 0 ? this : other;
           const cost = value.truncatedSize(bytesRemaining);
@@ -901,7 +905,7 @@ export class ArrayValue extends FieldValue {
         return {
           cmp: 0,
           bytes
-        }
+        };
       } else {
         return {
           cmp: 1,

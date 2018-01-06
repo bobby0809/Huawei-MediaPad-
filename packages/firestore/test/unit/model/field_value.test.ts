@@ -629,4 +629,15 @@ describe('FieldValue', () => {
     });
     expect(nestedLow.compareTo(nestedHigh)).to.equal(-1);
   });
+
+  it('truncates arrays', () => {
+    // string over head for two strings, plus room for one character
+    const longKey = 'a'.repeat(IndexTruncationThresholdBytes - 3);
+    const low = wrap([longKey, 'a']);
+    const high1 = wrap([longKey, 'ab']);
+    const high2 = wrap([longKey, 'aa']);
+
+    expect(low.compareTo(high1)).to.equal(-1);
+    expect(high1.compareTo(high2)).to.equal(0);
+  });
 });

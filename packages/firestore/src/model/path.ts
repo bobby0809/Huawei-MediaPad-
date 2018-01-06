@@ -179,11 +179,9 @@ export abstract class Path {
     if (left.length < right.length) return -1;
     if (left.length > right.length) return 1;
     if (left.isTruncated) {
-      console.log('left', right.isTruncated);
       if (right.isTruncated) return 0;
       return 1;
     } else if (right.isTruncated) {
-      console.log('right');
       return -1;
     }
     return 0;
@@ -201,7 +199,6 @@ export class TruncatedPath {
     public readonly byteLength: number
   ) {
     this.isTruncated = !(basePath.length == length && stringIndex == -1);
-    //console.log(this.length, this.stringIndex, this.isTruncated);
   }
 
   compareSegment(i: number, other: TruncatedPath): number {
@@ -276,7 +273,6 @@ export class ResourcePath extends Path {
         );
       }
     }
-    //console.log(count);
     // assert: i == segments.length
     return new TruncatedPath(this, i, -1, count);
   }

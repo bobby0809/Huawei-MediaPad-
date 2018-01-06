@@ -174,7 +174,7 @@ describe('truncating strings', () => {
       }
     ];
     for (const { input, threshold, length, output } of testCases) {
-      const index = truncatedStringLength(threshold)(input);
+      const index = truncatedStringLength(threshold)(input).index;
       expect(index).to.equal(
         length,
         'Input: "' + input + '", threshold: ' + threshold

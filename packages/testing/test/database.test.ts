@@ -132,8 +132,8 @@ describe('Testing Module Tests', function() {
     let app = firebase.initializeTestApp({
       databaseName: 'open',
       auth: {
-        uid: "alice",
-        email: "alice@fblocal.com"
+        uid: 'alice',
+        email: 'alice@fblocal.com'
       }
     });
     await app

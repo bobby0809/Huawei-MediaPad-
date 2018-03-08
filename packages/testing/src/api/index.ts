@@ -58,7 +58,7 @@ export function initializeAdminApp(options: any): firebase.app.App {
     'app-' + (new Date().getTime() + Math.random())
   );
   (app as any).INTERNAL.getToken = function() {
-    return Promise.resolve({ accessToken: "owner" });
+    return Promise.resolve({ accessToken: 'owner' });
   };
 
   return app;

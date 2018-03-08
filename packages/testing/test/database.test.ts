@@ -117,17 +117,40 @@ describe('Testing Module Tests', function() {
     expect(firebase.apps().length).to.equal(numApps + 3);
   });
 
-  it('initializeTestApp() should connect to the emulator', async function() {
+  it('initializeTestApp() with no auth should connect to the emulator', async function() {
     let app = firebase.initializeTestApp({
-      databaseName: 'foo',
+      databaseName: 'open'
+    });
+    await app
+      .database()
+      .ref()
+      .set(42);
+    await app.delete();
+  });
+
+  it('initializeTestApp() with auth should connect to the emulator', async function() {
+    let app = firebase.initializeTestApp({
+      databaseName: 'open',
       auth: {
-        uid: 'alice',
-        email: 'alice@fblocal.com'
+        uid: "alice",
+        email: "alice@fblocal.com"
       }
     });
     await app
       .database()
       .ref()
       .set(42);
+    await app.delete();
+  });
+
+  it('initializeAdminApp() should connect to the emulator', async function() {
+    let app = firebase.initializeAdminApp({
+      databaseName: 'closed'
+    });
+    await app
+      .database()
+      .ref()
+      .set(42);
+    await app.delete();
   });
 });

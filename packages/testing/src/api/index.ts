@@ -33,8 +33,9 @@ class FakeCredentials {
   }
 }
 
-function fakeToken(claims: Object): String {
+function fakeToken(claims: any): String {
   let header = { alg: 'RS256', kid: 'fakekid' };
+  claims.iat = 12345;
   return [
     util.base64.encodeString(JSON.stringify(header), false),
     util.base64.encodeString(JSON.stringify(claims), false),
@@ -50,12 +51,17 @@ export function initializeAdminApp(options: any): firebase.app.App {
   if (!('databaseName' in options)) {
     throw new Error('databaseName not specified');
   }
-  return firebase.initializeApp(
+  let app = firebase.initializeApp(
     {
       databaseURL: DBURL + '?ns=' + options.databaseName
     },
     'app-' + (new Date().getTime() + Math.random())
   );
+  (app as any).INTERNAL.getToken = function() {
+    return Promise.resolve({ accessToken: "owner" });
+  };
+
+  return app;
 }
 
 export function initializeTestApp(options: any): firebase.app.App {
@@ -70,11 +76,12 @@ export function initializeTestApp(options: any): firebase.app.App {
     'app-' + (new Date().getTime() + Math.random())
   );
 
-  let token = fakeToken({ sub: 'alice', iat: 12345 });
-  (app as any).INTERNAL.getToken = function() {
-    console.log('[RPB] internal getAccessToken');
-    return Promise.resolve({ accessToken: token });
-  };
+  if (options.auth) {
+    let token = fakeToken(options.auth);
+    (app as any).INTERNAL.getToken = function() {
+      return Promise.resolve({ accessToken: token });
+    };
+  }
 
   return app;
 }

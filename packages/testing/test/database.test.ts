@@ -70,18 +70,11 @@ describe('Testing Module Tests', function() {
   });
 
   it('initializeTestApp() uses specified auth.', function() {
-    let app = firebase.initializeTestApp({ databaseName: 'foo' });
-    expect(app.options).to.have.any.keys('databaseAuthVariableOverride');
-
-    app = firebase.initializeTestApp({
+    firebase.initializeTestApp({ databaseName: 'foo' });
+    firebase.initializeTestApp({
       databaseName: 'foo',
       auth: { uid: 'alice' }
     });
-    expect(app.options).to.have.any.keys('databaseAuthVariableOverride');
-    expect(app.options.databaseAuthVariableOverride).to.have.all.keys('uid');
-    expect(app.options.databaseAuthVariableOverride['uid']).to.be.equal(
-      'alice'
-    );
   });
 
   it('loadDatabaseRules() throws if no databaseName or rulesPath', async function() {
@@ -122,5 +115,16 @@ describe('Testing Module Tests', function() {
     expect(firebase.apps().length).to.equal(numApps + 2);
     await firebase.initializeTestApp({ databaseName: 'foo' });
     expect(firebase.apps().length).to.equal(numApps + 3);
+  });
+
+  it('initializeTestApp() should connect to the emulator', async function() {
+    let app = firebase.initializeTestApp({
+      databaseName: "foo",
+      auth: {
+        uid: "alice",
+        email: "alice@fblocal.com"
+      }
+    });
+    await app.database().ref().set(42);
   });
 });

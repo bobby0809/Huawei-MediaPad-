@@ -14,7 +14,8 @@
  * limitations under the License.
  */
 
-import * as admin from 'firebase-admin';
+import * as firebase from 'firebase';
+import * as util from '@firebase/util';
 import * as request from 'request-promise';
 import * as fs from 'fs';
 
@@ -32,36 +33,50 @@ class FakeCredentials {
   }
 }
 
-export function apps(): (admin.app.App | null)[] {
-  return admin.apps;
+function fakeToken(claims: Object): String {
+  let header = { alg: "RS256", kid: "fakekid" };
+  return [
+    util.base64.encodeString(JSON.stringify(header), false),
+    util.base64.encodeString(JSON.stringify(claims), false),
+    "fakesignature"
+  ].join(".");
 }
 
-export function initializeAdminApp(options: any): admin.app.App {
+export function apps(): (firebase.app.App | null)[] {
+  return firebase.apps;
+}
+
+export function initializeAdminApp(options: any): firebase.app.App {
   if (!('databaseName' in options)) {
     throw new Error('databaseName not specified');
   }
-  return admin.initializeApp(
+  return firebase.initializeApp(
     {
-      credential: new FakeCredentials(),
       databaseURL: DBURL + '?ns=' + options.databaseName
     },
     'app-' + (new Date().getTime() + Math.random())
   );
 }
 
-export function initializeTestApp(options: any): admin.app.App {
+export function initializeTestApp(options: any): firebase.app.App {
   if (!('databaseName' in options)) {
     throw new Error('databaseName not specified');
   }
   // if options.auth is not present, we will construct an app with auth == null
-  return admin.initializeApp(
+  let app = firebase.initializeApp(
     {
-      credential: new FakeCredentials(),
-      databaseURL: DBURL + '?ns=' + options.databaseName,
-      databaseAuthVariableOverride: options.auth || null
+      databaseURL: DBURL + '?ns=' + options.databaseName
     },
     'app-' + (new Date().getTime() + Math.random())
   );
+
+  let token = fakeToken({ sub: "alice", iat: 12345 });
+  (app as any).INTERNAL.getToken = function() {
+    console.log("[RPB] internal getAccessToken");
+    return Promise.resolve({ accessToken: token });
+  };
+
+  return app;
 }
 
 export function loadDatabaseRules(options: any): void {
@@ -71,8 +86,7 @@ export function loadDatabaseRules(options: any): void {
   if (!('rulesPath' in options)) {
     throw new Error('rulesPath not specified');
   }
-  if (!fs.existsSync(options.rulesPath)) {
-    throw new Error('Could not find file: ' + options.rulesPath);
+  if (!fs.existsSync(options.rulesPath)) { throw new Error('Could not find file: ' + options.rulesPath);
   }
   fs
     .createReadStream(options.rulesPath)

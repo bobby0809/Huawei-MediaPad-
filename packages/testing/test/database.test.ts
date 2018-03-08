@@ -119,12 +119,15 @@ describe('Testing Module Tests', function() {
 
   it('initializeTestApp() should connect to the emulator', async function() {
     let app = firebase.initializeTestApp({
-      databaseName: "foo",
+      databaseName: 'foo',
       auth: {
-        uid: "alice",
-        email: "alice@fblocal.com"
+        uid: 'alice',
+        email: 'alice@fblocal.com'
       }
     });
-    await app.database().ref().set(42);
+    await app
+      .database()
+      .ref()
+      .set(42);
   });
 });

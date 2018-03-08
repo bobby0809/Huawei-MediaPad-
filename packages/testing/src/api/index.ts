@@ -34,12 +34,12 @@ class FakeCredentials {
 }
 
 function fakeToken(claims: Object): String {
-  let header = { alg: "RS256", kid: "fakekid" };
+  let header = { alg: 'RS256', kid: 'fakekid' };
   return [
     util.base64.encodeString(JSON.stringify(header), false),
     util.base64.encodeString(JSON.stringify(claims), false),
-    "fakesignature"
-  ].join(".");
+    'fakesignature'
+  ].join('.');
 }
 
 export function apps(): (firebase.app.App | null)[] {
@@ -70,9 +70,9 @@ export function initializeTestApp(options: any): firebase.app.App {
     'app-' + (new Date().getTime() + Math.random())
   );
 
-  let token = fakeToken({ sub: "alice", iat: 12345 });
+  let token = fakeToken({ sub: 'alice', iat: 12345 });
   (app as any).INTERNAL.getToken = function() {
-    console.log("[RPB] internal getAccessToken");
+    console.log('[RPB] internal getAccessToken');
     return Promise.resolve({ accessToken: token });
   };
 
@@ -86,7 +86,8 @@ export function loadDatabaseRules(options: any): void {
   if (!('rulesPath' in options)) {
     throw new Error('rulesPath not specified');
   }
-  if (!fs.existsSync(options.rulesPath)) { throw new Error('Could not find file: ' + options.rulesPath);
+  if (!fs.existsSync(options.rulesPath)) {
+    throw new Error('Could not find file: ' + options.rulesPath);
   }
   fs
     .createReadStream(options.rulesPath)

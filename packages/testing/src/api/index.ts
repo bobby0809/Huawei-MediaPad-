@@ -42,8 +42,8 @@ export function apps(): (firebase.app.App | null)[] {
 }
 
 export abstract class AdminAppOptions {
-  databaseName: string
-  auth?: any
+  databaseName: string;
+  auth?: any;
 
   static validate(instance: TestAppOptions) {
     if (!instance.databaseName) {
@@ -70,8 +70,8 @@ export function initializeAdminApp(options: AdminAppOptions): firebase.app.App {
 }
 
 export abstract class TestAppOptions {
-  databaseName: string
-  auth?: any
+  databaseName: string;
+  auth?: any;
 
   static validate(instance: TestAppOptions) {
     if (!instance.databaseName) {
@@ -100,10 +100,9 @@ export function initializeTestApp(options: TestAppOptions): firebase.app.App {
   return app;
 }
 
-
 export abstract class LoadDatabaseRulesOptions {
-  databaseName: string
-  rulesPath: string
+  databaseName: string;
+  rulesPath: string;
 
   static validate(instance: LoadDatabaseRulesOptions) {
     if (!instance.databaseName) {

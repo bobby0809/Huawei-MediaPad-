@@ -41,7 +41,18 @@ export function apps(): (firebase.app.App | null)[] {
   return firebase.apps;
 }
 
-export function initializeAdminApp(options: any): firebase.app.App {
+export abstract class AdminAppOptions {
+  databaseName: string
+  auth?: any
+
+  static validate(instance: TestAppOptions) {
+    if (!instance.databaseName) {
+      throw new Error('databaseName not specified');
+    }
+  }
+}
+export function initializeAdminApp(options: AdminAppOptions): firebase.app.App {
+  AdminAppOptions.validate(options);
   if (!options.databaseName) {
     throw new Error('databaseName not specified');
   }
@@ -58,10 +69,19 @@ export function initializeAdminApp(options: any): firebase.app.App {
   return app;
 }
 
-export function initializeTestApp(options: any): firebase.app.App {
-  if (!options.databaseName) {
-    throw new Error('databaseName not specified');
+export abstract class TestAppOptions {
+  databaseName: string
+  auth?: any
+
+  static validate(instance: TestAppOptions) {
+    if (!instance.databaseName) {
+      throw new Error('databaseName not specified');
+    }
   }
+}
+
+export function initializeTestApp(options: TestAppOptions): firebase.app.App {
+  TestAppOptions.validate(options);
   // if options.auth is not present, we will construct an app with auth == null
   let app = firebase.initializeApp(
     {
@@ -80,13 +100,23 @@ export function initializeTestApp(options: any): firebase.app.App {
   return app;
 }
 
-export function loadDatabaseRules(options: any): void {
-  if (!options.databaseName) {
-    throw new Error('databaseName not specified');
+
+export abstract class LoadDatabaseRulesOptions {
+  databaseName: string
+  rulesPath: string
+
+  static validate(instance: LoadDatabaseRulesOptions) {
+    if (!instance.databaseName) {
+      throw new Error('databaseName not specified');
+    }
+    if (!instance.rulesPath) {
+      throw new Error('rulesPath not specified');
+    }
   }
-  if (!options.rulesPath) {
-    throw new Error('rulesPath not specified');
-  }
+}
+
+export function loadDatabaseRules(options: LoadDatabaseRulesOptions): void {
+  LoadDatabaseRulesOptions.validate(options);
   if (!fs.existsSync(options.rulesPath)) {
     throw new Error('Could not find file: ' + options.rulesPath);
   }

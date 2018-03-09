@@ -51,7 +51,7 @@ export function initializeAdminApp(options: any): firebase.app.App {
     },
     'app-' + (new Date().getTime() + Math.random())
   );
-  (app as any as types._FirebaseApp).INTERNAL.getToken = function() {
+  ((app as any) as types._FirebaseApp).INTERNAL.getToken = function() {
     return Promise.resolve({ accessToken: 'owner' });
   };
 
@@ -72,7 +72,7 @@ export function initializeTestApp(options: any): firebase.app.App {
 
   if (options.auth) {
     let token = fakeToken(options.auth);
-    (app as any as types._FirebaseApp).INTERNAL.getToken = function() {
+    ((app as any) as types._FirebaseApp).INTERNAL.getToken = function() {
       return Promise.resolve({ accessToken: token });
     };
   }

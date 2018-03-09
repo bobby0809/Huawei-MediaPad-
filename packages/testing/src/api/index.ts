@@ -16,26 +16,20 @@
 
 import * as firebase from 'firebase';
 import * as util from '@firebase/util';
+import * as types from '@firebase/app-types/private';
 import * as request from 'request-promise';
 import * as fs from 'fs';
 
 const DBURL = 'http://localhost:9000';
 
-class FakeCredentials {
-  getAccessToken() {
-    return Promise.resolve({
-      expires_in: 1000000,
-      access_token: 'owner'
-    });
+function fakeToken(claims: any): string {
+  if (!claims.uid) {
+    throw new Error('auth claims must define a "uid"');
   }
-  getCertificate() {
-    return null;
-  }
-}
 
-function fakeToken(claims: any): String {
   let header = { alg: 'RS256', kid: 'fakekid' };
   claims.iat = 12345;
+  claims.sub = claims.uid;
   return [
     util.base64.encodeString(JSON.stringify(header), false),
     util.base64.encodeString(JSON.stringify(claims), false),
@@ -48,7 +42,7 @@ export function apps(): (firebase.app.App | null)[] {
 }
 
 export function initializeAdminApp(options: any): firebase.app.App {
-  if (!('databaseName' in options)) {
+  if (!options.databaseName) {
     throw new Error('databaseName not specified');
   }
   let app = firebase.initializeApp(
@@ -57,7 +51,7 @@ export function initializeAdminApp(options: any): firebase.app.App {
     },
     'app-' + (new Date().getTime() + Math.random())
   );
-  (app as any).INTERNAL.getToken = function() {
+  (app as any as types._FirebaseApp).INTERNAL.getToken = function() {
     return Promise.resolve({ accessToken: 'owner' });
   };
 
@@ -65,7 +59,7 @@ export function initializeAdminApp(options: any): firebase.app.App {
 }
 
 export function initializeTestApp(options: any): firebase.app.App {
-  if (!('databaseName' in options)) {
+  if (!options.databaseName) {
     throw new Error('databaseName not specified');
   }
   // if options.auth is not present, we will construct an app with auth == null
@@ -78,7 +72,7 @@ export function initializeTestApp(options: any): firebase.app.App {
 
   if (options.auth) {
     let token = fakeToken(options.auth);
-    (app as any).INTERNAL.getToken = function() {
+    (app as any as types._FirebaseApp).INTERNAL.getToken = function() {
       return Promise.resolve({ accessToken: token });
     };
   }
@@ -87,10 +81,10 @@ export function initializeTestApp(options: any): firebase.app.App {
 }
 
 export function loadDatabaseRules(options: any): void {
-  if (!('databaseName' in options)) {
+  if (!options.databaseName) {
     throw new Error('databaseName not specified');
   }
-  if (!('rulesPath' in options)) {
+  if (!options.rulesPath) {
     throw new Error('rulesPath not specified');
   }
   if (!fs.existsSync(options.rulesPath)) {

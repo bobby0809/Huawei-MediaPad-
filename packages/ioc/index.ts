@@ -14,3 +14,14 @@
  * limitations under the License.
  */
 
+import { FirebaseApp } from "@firebase/app-types";
+
+export type interopFactory = (app: FirebaseApp, ...args) => any;
+
+export function register(serviceName: string, definition: interopFactory): void {
+
+}
+
+export function injector(app: FirebaseApp): Container {
+
+}

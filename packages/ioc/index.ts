@@ -15,13 +15,26 @@
  */
 
 import { FirebaseApp } from "@firebase/app-types";
+import { Container, interopFactory } from "./src/Container";
 
-export type interopFactory = (app: FirebaseApp, ...args) => any;
+export const CONTAINER_KEY = Symbol('@firebase/ioc App Container');
 
 export function register(serviceName: string, definition: interopFactory): void {
+  /**
+   * Register the new service with all of the available containers
+   */
+  Container.instances.forEach(container => {
+    container.register(serviceName, definition);
+  });
 
+  /**
+   * Push the registration to the default list of registrations
+   */
+  Container.registrations.push([serviceName, definition]);
 }
 
 export function injector(app: FirebaseApp): Container {
-
+  return app[CONTAINER_KEY];
 }
+
+export { Container } from './src/Container';

@@ -18,7 +18,7 @@ export class Container {
    */
 
   /**
-   * The existing registered services
+   * Pre-existing registered services
    */ 
   static get registrations() {
     return registrations;
@@ -56,7 +56,9 @@ export class Container {
   } = {};
 
   private _pendingInit: {
-    [serviceName: string]: boolean
+    [serviceName: string]: {
+      [instName: string]: boolean
+    }
   } = {};
 
   constructor(private _app: FirebaseApp) {
@@ -75,6 +77,12 @@ export class Container {
    * service in question
    */
   register(serviceName: string, factoryFxn: interopFactory) {
+    if (typeof factoryFxn !== 'function') {
+      throw new Error('invalid-factory');
+    }
+    if (this._factories[serviceName]) {
+      throw new Error('already-exists');
+    }
     /**
      * Capture the factory for later requests
      */
@@ -131,6 +139,23 @@ export class Container {
       return this._pendingRegistration[serviceName].promise;
     })();
 
+    const instKey = options.instance || DEFAULT_SERVICE_INSTANCE;
+
+    /**
+     * Check and see if we are in a registration cycle, if so, throw an error
+     */
+    if (this._pendingInit[serviceName] && this._pendingInit[serviceName][instKey]) {
+      throw new Error('cycle-detected');
+    }
+
+    /**
+     * Set the pending state to `true`
+     */
+    if (!this._pendingInit[serviceName]) {
+      this._pendingInit[serviceName] = {};
+    }
+    this._pendingInit[serviceName][instKey] = true;
+
     /**
      * If the instance cache doesn't exist for the given service, create it
      */
@@ -138,13 +163,16 @@ export class Container {
       this._instCache[serviceName] = {};
     }
 
-    const instKey = options.instance || DEFAULT_SERVICE_INSTANCE;
-
     /**
      * Create and cache a service instance
      */
-    const inst = factory(this._app, instKey);
+    const inst = factory(this._app, options.instance);
     this._instCache[serviceName][instKey] = inst;
+
+    /**
+     * Unset the pending state
+     */
+    this._pendingInit[serviceName][instKey] = false;    
 
     /**
      * Return the service instance
@@ -168,20 +196,40 @@ export class Container {
     
     const factory = this._factories[serviceName];
 
+    const instKey = options.instance || DEFAULT_SERVICE_INSTANCE;    
+
     /**
-     * Create and cache an instance of the factory
+     * Check and see if we are in a registration cycle, if so, throw an error
      */
-    if (!this._instCache[name]) {
-      this._instCache[name] = {};
+    if (this._pendingInit[serviceName] && this._pendingInit[serviceName][instKey]) {
+      throw new Error('cycle-detected');
     }
 
-    const instKey = options.instance || DEFAULT_SERVICE_INSTANCE;    
+    /**
+     * Set the pending state to `true`
+     */
+    if (!this._pendingInit[serviceName]) {
+      this._pendingInit[serviceName] = {};
+    }
+    this._pendingInit[serviceName][instKey] = true;
+
+    /**
+     * If the instance cache doesn't exist for the given service, create it
+     */
+    if (!this._instCache[serviceName]) {
+      this._instCache[serviceName] = {};
+    }
 
     /**
      * Create and cache a service instance
      */
-    const inst = factory(this._app, instKey);
-    this._instCache[name][instKey] = inst;
+    const inst = factory(this._app, options.instance);
+    this._instCache[serviceName][instKey] = inst;
+
+    /**
+     * Unset the pending state
+     */
+    this._pendingInit[serviceName][instKey] = false;    
     
     /**
      * Return the service instance

@@ -18,9 +18,13 @@ export class Deferred<R> {
   promise: Promise<R>;
   reject;
   resolve;
+  public value: any;
   constructor() {
     this.promise = new Promise((resolve, reject) => {
-      this.resolve = resolve;
+      this.resolve = value => {
+        this.value = value;
+        resolve(value);
+      };
       this.reject = reject;
     });
   }

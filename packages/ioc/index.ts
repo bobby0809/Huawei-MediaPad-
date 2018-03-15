@@ -17,7 +17,7 @@
 import { FirebaseApp } from "@firebase/app-types";
 import { Container, interopFactory } from "./src/Container";
 
-export const CONTAINER_KEY = Symbol('@firebase/ioc App Container');
+export const CONTAINER_KEY = Symbol('@firebase/ioc Container Key');
 
 export function register(serviceName: string, definition: interopFactory): void {
   /**

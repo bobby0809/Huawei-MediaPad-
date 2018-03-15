@@ -2,30 +2,15 @@ import { FirebaseApp } from "@firebase/app-types";
 import { Deferred } from "@firebase/util";
 
 export type interopFactory = (app: FirebaseApp, instString?: string) => any;
-
-/**
- * A function to memoize factory function accesses
- */
-function memoizeFactory(rawFactory: interopFactory) {
-  const cache = new WeakMap();
-  const factory: interopFactory = (app: FirebaseApp, instString: string) => {
-    if (!cache.has(app)) {
-      cache.set(app, {});
-    }
-    const instCache = cache.get(app);
-
-    if (!instCache[instString]) {
-      const inst = rawFactory(app, instString);
-      instCache[instString] = inst;
-    }
-    return instCache[instString];
-
-  };
-  return factory
+export interface GetOptions {
+  instance?: string
+  optional?: boolean
 }
 
 const registrations: [string, interopFactory][] = [];
 const instances: Container[] = [];
+
+const DEFAULT_SERVICE_INSTANCE = '[DEFAULT]';
 
 export class Container {
   /**
@@ -38,10 +23,18 @@ export class Container {
     return instances;
   }
 
-  private _factories = {};
-  private _pendingRegistration: {
-    [name: string]: Deferred<any> | null
+  private _instCache: {
+    [serviceName: string]: {
+      [instName: string]: any
+    }
   } = {};
+  private _factories: {
+    [name: string]: interopFactory
+  } = {};
+  private _pendingRegistration: {
+    [name: string]: Deferred<interopFactory> | null
+  } = {};
+  private _pendingInit = new WeakMap();
 
   constructor(private _app: FirebaseApp) {
     instances.push(this);
@@ -51,49 +44,112 @@ export class Container {
   }
 
   register(name: string, factoryFxn: interopFactory) {
-    const memoizedFactoryFxn = memoizeFactory(factoryFxn);
     /**
      * Capture the factory for later requests
      */
-    this._factories[name] = memoizedFactoryFxn;
-
+    this._factories[name] = factoryFxn;
+    
     /**
      * Resolve any pending `get` calls
      */
     if (this._pendingRegistration[name]) {
-      const service = memoizedFactoryFxn(this._app);
-      this._pendingRegistration[name].resolve(service);
+      this._pendingRegistration[name].resolve(factoryFxn);
       this._pendingRegistration[name] = null;
     }
   }
 
-  async get(name) {
-    /**
-     * If the factory has already been registered, return it
-     */
-    if (this._factories[name]) {
-      return this._factories[name](this._app);
-    }
+  private _getFromCache(serviceName, options) {
+    const instKey = options.instance || DEFAULT_SERVICE_INSTANCE;
 
     /**
-     * If it doesn't already exist, create a new deferred to asynchronously
-     * handle the resolution of the `get`
+     * If there is an existing service instance, return it
      */
-    if (!this._pendingRegistration[name]) {
-      this._pendingRegistration[name] = new Deferred();
+    if (this._instCache[serviceName] && this._instCache[serviceName][instKey]) {
+      return this._instCache[serviceName][instKey];
     }
-    
-
-    return this._pendingRegistration[name].promise;
   }
 
-  getImmediate(name) {
+  async get(serviceName, options: GetOptions = {}) {
     /**
-     * If the factory has already been registered, return it
+     * If the cached value exists then return it
      */
-    if (!this._factories[name]) {
+    const cachedVal = this._getFromCache(serviceName, options);
+    if (cachedVal) return cachedVal;
+
+    /**
+     * The factory can either be pre-registered or lazily loaded, we handle them
+     * both the same way so we will wait for the factory to be assigned to this
+     * variable
+     */
+    const factory = await (async () => {
+      if (this._factories[serviceName]) return this._factories[serviceName];
+      
+      /**
+       * If it doesn't already exist, create a new deferred to asynchronously
+       * handle the resolution of the `get`
+       */
+      if (!this._pendingRegistration[serviceName]) {
+        this._pendingRegistration[serviceName] = new Deferred();
+      }
+      
+      return this._pendingRegistration[serviceName].promise;
+    })();
+
+    /**
+     * If the instance cache doesn't exist for the given service, create it
+     */
+    if (!this._instCache[serviceName]) {
+      this._instCache[serviceName] = {};
+    }
+
+    const instKey = options.instance || DEFAULT_SERVICE_INSTANCE;
+
+    /**
+     * Create and cache a service instance
+     */
+    const inst = factory(this._app, instKey);
+    this._instCache[serviceName][instKey] = inst;
+
+    /**
+     * Return the service instance
+     */
+    return inst;
+  }
+
+  getImmediate(serviceName, options: GetOptions = {}) {
+    /**
+     * If the cached value exists then return it
+     */
+    const cachedVal = this._getFromCache(serviceName, options);
+    if (cachedVal) return cachedVal;
+    
+    /**
+     * If the factory has not been registered, throw an error
+     */
+    if (!this._factories[serviceName]) {
       throw new Error('not-exist');
     }
-    return this._factories[name](this._app);
+    
+    const factory = this._factories[serviceName];
+
+    /**
+     * Create and cache an instance of the factory
+     */
+    if (!this._instCache[name]) {
+      this._instCache[name] = {};
+    }
+
+    const instKey = options.instance || DEFAULT_SERVICE_INSTANCE;    
+
+    /**
+     * Create and cache a service instance
+     */
+    const inst = factory(this._app, instKey);
+    this._instCache[name][instKey] = inst;
+    
+    /**
+     * Return the service instance
+     */
+    return inst;
   }
 }

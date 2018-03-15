@@ -4,6 +4,8 @@ import { Deferred } from "@firebase/util";
 export type interopFactory = (app: FirebaseApp, instString?: string) => any;
 export interface GetOptions {
   instance?: string
+}
+export interface GetImmediateOptions extends GetOptions {
   optional?: boolean
 }
 
@@ -180,7 +182,7 @@ export class Container {
     return inst;
   }
 
-  getImmediate(serviceName, options: GetOptions = {}) {
+  getImmediate(serviceName, options: GetImmediateOptions = {}) {
     /**
      * If the cached value exists then return it
      */
@@ -191,7 +193,11 @@ export class Container {
      * If the factory has not been registered, throw an error
      */
     if (!this._factories[serviceName]) {
-      throw new Error('not-exist');
+      if (options.optional) {
+        return null;
+      } else {
+        throw new Error('not-exist');
+      }
     }
     
     const factory = this._factories[serviceName];

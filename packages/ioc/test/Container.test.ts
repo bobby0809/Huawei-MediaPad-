@@ -193,6 +193,9 @@ describe('Container Tests', () => {
         const service = inst.getImmediate("I don't exist");
       }).to.throw();
     });
+    it("Should not throw an error if a service is requested OPTIONALLY that doesn't exist", () => {
+      expect(inst.getImmediate("I don't exist", { optional: true })).to.not.be.ok;
+    });
     it('Should properly pass the instance string, if defined', () => {
       const service = inst.getImmediate('test', { instance: 'special string' });
       expect(service).to.deep.equal({

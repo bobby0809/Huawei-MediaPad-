@@ -16,25 +16,48 @@ export class Container {
   /**
    * Static Members
    */
+
+  /**
+   * The existing registered services
+   */ 
   static get registrations() {
     return registrations;
   }
+
+  /**
+   * An Array of all Container instances
+   */
   static get instances() {
     return instances;
   }
 
+  /**
+   * A cache for all of the instances of each service that exist,
+   * we will only ever create one instance of a given service+instName.
+   */
   private _instCache: {
     [serviceName: string]: {
       [instName: string]: any
     }
   } = {};
+
+  /**
+   * The factories that have been registered with the Container
+   */
   private _factories: {
-    [name: string]: interopFactory
+    [serviceName: string]: interopFactory
   } = {};
+
+  /**
+   * Pending `get` calls waiting for the registration of a given factory
+   */
   private _pendingRegistration: {
-    [name: string]: Deferred<interopFactory> | null
+    [serviceName: string]: Deferred<interopFactory> | null
   } = {};
-  private _pendingInit = new WeakMap();
+
+  private _pendingInit: {
+    [serviceName: string]: boolean
+  } = {};
 
   constructor(private _app: FirebaseApp) {
     instances.push(this);
@@ -43,21 +66,34 @@ export class Container {
     });
   }
 
-  register(name: string, factoryFxn: interopFactory) {
+  /**
+   * Call to register a given service with the Container
+   * 
+   * @param serviceName The name of the service we are registering with the
+   * Container
+   * @param factoryFxn The factory function that will return an instance of the
+   * service in question
+   */
+  register(serviceName: string, factoryFxn: interopFactory) {
     /**
      * Capture the factory for later requests
      */
-    this._factories[name] = factoryFxn;
+    this._factories[serviceName] = factoryFxn;
     
     /**
      * Resolve any pending `get` calls
      */
-    if (this._pendingRegistration[name]) {
-      this._pendingRegistration[name].resolve(factoryFxn);
-      this._pendingRegistration[name] = null;
+    if (this._pendingRegistration[serviceName]) {
+      this._pendingRegistration[serviceName].resolve(factoryFxn);
+      this._pendingRegistration[serviceName] = null;
     }
   }
 
+  /**
+   * Try to get the requested service from cache
+   * @param serviceName The name of the service
+   * @param options The instance string of the service we are trying to get
+   */
   private _getFromCache(serviceName, options) {
     const instKey = options.instance || DEFAULT_SERVICE_INSTANCE;
 

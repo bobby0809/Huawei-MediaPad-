@@ -37,6 +37,7 @@ import {
   patchProperty,
   Subscribe
 } from '@firebase/util';
+import { CONTAINER_KEY, Container } from "@firebase/ioc";
 
 const contains = function(obj, key) {
   return Object.prototype.hasOwnProperty.call(obj, key);
@@ -62,6 +63,7 @@ class FirebaseAppImpl implements FirebaseApp {
     };
   } = {};
 
+  public [CONTAINER_KEY]: Container;
   public INTERNAL;
 
   constructor(
@@ -85,6 +87,8 @@ class FirebaseAppImpl implements FirebaseApp {
         );
       }
     };
+
+    this[CONTAINER_KEY] = new Container(this);
   }
 
   get name(): string {

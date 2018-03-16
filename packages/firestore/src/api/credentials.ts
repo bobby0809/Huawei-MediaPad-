@@ -18,7 +18,7 @@ import { User } from '../auth/user';
 import { assert } from '../util/assert';
 import { Code, FirestoreError } from '../util/error';
 import { FirebaseApp } from '@firebase/app-types';
-import { injector } from "@firebase/ioc";
+import { injector } from '@firebase/ioc';
 
 // TODO(mikelehen): This should be split into multiple files and probably
 // moved to an auth/ folder to match other platforms.
@@ -154,11 +154,11 @@ export class FirebaseCredentialsProvider implements CredentialsProvider {
 
     this.userCounter = 0;
 
-    injector(this.app).get('auth').then(auth => {
-      auth.addAuthTokenListener(
-        this.tokenListener
-      );
-    });
+    injector(this.app)
+      .get('auth')
+      .then(auth => {
+        auth.addAuthTokenListener(this.tokenListener);
+      });
     /**
      * Code assumed this fired at least once w/ null, this should maintain
      * that contract
@@ -178,7 +178,7 @@ export class FirebaseCredentialsProvider implements CredentialsProvider {
     const initialUserCounter = this.userCounter;
 
     const auth = injector(this.app).getImmediate('auth', { optional: true });
-    const tokenData = await auth ? auth.getToken(forceRefresh) : null;
+    const tokenData = (await auth) ? auth.getToken(forceRefresh) : null;
 
     // Cancel the request since the user changed while the request was
     // outstanding so the response is likely for a previous user (which
@@ -223,9 +223,7 @@ export class FirebaseCredentialsProvider implements CredentialsProvider {
 
     const auth = injector(this.app).getImmediate('auth', { optional: true });
     if (auth) {
-      auth.removeAuthTokenListener(
-        this.tokenListener!
-      );
+      auth.removeAuthTokenListener(this.tokenListener!);
     }
     this.tokenListener = null;
     this.userListener = null;

@@ -29,7 +29,7 @@ import * as type from './type';
 import { XhrIoPool } from './xhriopool';
 import { FirebaseApp } from '@firebase/app-types';
 import { FirebaseAuthTokenData } from '@firebase/app-types/private';
-import { injector } from "@firebase/ioc";
+import { injector } from '@firebase/ioc';
 
 /**
  * @param app If null, getAuthToken always resolves with null.
@@ -91,8 +91,8 @@ export class AuthWrapper {
     try {
       const { getToken } = injector(this.app_).getImmediate('auth');
       const response = await getToken();
-      return response && response.accessToken || null;
-    } catch(err) {
+      return (response && response.accessToken) || null;
+    } catch (err) {
       return null;
     }
   }

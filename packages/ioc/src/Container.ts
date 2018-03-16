@@ -1,12 +1,12 @@
-import { FirebaseApp } from "@firebase/app-types";
-import { Deferred } from "@firebase/util";
+import { FirebaseApp } from '@firebase/app-types';
+import { Deferred } from '@firebase/util';
 
 export type interopFactory = (app: FirebaseApp, instString?: string) => any;
 export interface GetOptions {
-  instance?: string
+  instance?: string;
 }
 export interface GetImmediateOptions extends GetOptions {
-  optional?: boolean
+  optional?: boolean;
 }
 
 const registrations: [string, interopFactory][] = [];
@@ -21,7 +21,8 @@ export class Container {
 
   /**
    * Pre-existing registered services
-   */ 
+   */
+
   static get registrations() {
     return registrations;
   }
@@ -39,28 +40,28 @@ export class Container {
    */
   private _instCache: {
     [serviceName: string]: {
-      [instName: string]: any
-    }
+      [instName: string]: any;
+    };
   } = {};
 
   /**
    * The factories that have been registered with the Container
    */
   private _factories: {
-    [serviceName: string]: interopFactory
+    [serviceName: string]: interopFactory;
   } = {};
 
   /**
    * Pending `get` calls waiting for the registration of a given factory
    */
   private _pendingRegistration: {
-    [serviceName: string]: Deferred<interopFactory> | null
+    [serviceName: string]: Deferred<interopFactory> | null;
   } = {};
 
   private _pendingInit: {
     [serviceName: string]: {
-      [instName: string]: boolean
-    }
+      [instName: string]: boolean;
+    };
   } = {};
 
   constructor(private _app: FirebaseApp) {
@@ -72,7 +73,7 @@ export class Container {
 
   /**
    * Call to register a given service with the Container
-   * 
+   *
    * @param serviceName The name of the service we are registering with the
    * Container
    * @param factoryFxn The factory function that will return an instance of the
@@ -89,7 +90,7 @@ export class Container {
      * Capture the factory for later requests
      */
     this._factories[serviceName] = factoryFxn;
-    
+
     /**
      * Resolve any pending `get` calls
      */
@@ -129,7 +130,7 @@ export class Container {
      */
     const factory = await (async () => {
       if (this._factories[serviceName]) return this._factories[serviceName];
-      
+
       /**
        * If it doesn't already exist, create a new deferred to asynchronously
        * handle the resolution of the `get`
@@ -137,7 +138,7 @@ export class Container {
       if (!this._pendingRegistration[serviceName]) {
         this._pendingRegistration[serviceName] = new Deferred();
       }
-      
+
       return this._pendingRegistration[serviceName].promise;
     })();
 
@@ -146,7 +147,10 @@ export class Container {
     /**
      * Check and see if we are in a registration cycle, if so, throw an error
      */
-    if (this._pendingInit[serviceName] && this._pendingInit[serviceName][instKey]) {
+    if (
+      this._pendingInit[serviceName] &&
+      this._pendingInit[serviceName][instKey]
+    ) {
       throw new Error('cycle-detected');
     }
 
@@ -174,7 +178,7 @@ export class Container {
     /**
      * Unset the pending state
      */
-    this._pendingInit[serviceName][instKey] = false;    
+    this._pendingInit[serviceName][instKey] = false;
 
     /**
      * Return the service instance
@@ -188,7 +192,7 @@ export class Container {
      */
     const cachedVal = this._getFromCache(serviceName, options);
     if (cachedVal) return cachedVal;
-    
+
     /**
      * If the factory has not been registered, throw an error
      */
@@ -199,15 +203,18 @@ export class Container {
         throw new Error('not-exist');
       }
     }
-    
+
     const factory = this._factories[serviceName];
 
-    const instKey = options.instance || DEFAULT_SERVICE_INSTANCE;    
+    const instKey = options.instance || DEFAULT_SERVICE_INSTANCE;
 
     /**
      * Check and see if we are in a registration cycle, if so, throw an error
      */
-    if (this._pendingInit[serviceName] && this._pendingInit[serviceName][instKey]) {
+    if (
+      this._pendingInit[serviceName] &&
+      this._pendingInit[serviceName][instKey]
+    ) {
       throw new Error('cycle-detected');
     }
 
@@ -235,8 +242,8 @@ export class Container {
     /**
      * Unset the pending state
      */
-    this._pendingInit[serviceName][instKey] = false;    
-    
+    this._pendingInit[serviceName][instKey] = false;
+
     /**
      * Return the service instance
      */

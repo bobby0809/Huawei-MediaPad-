@@ -37,7 +37,7 @@ import {
   patchProperty,
   Subscribe
 } from '@firebase/util';
-import { CONTAINER_KEY, Container } from "@firebase/ioc";
+import { CONTAINER_KEY, Container } from '@firebase/ioc';
 
 const contains = function(obj, key) {
   return Object.prototype.hasOwnProperty.call(obj, key);

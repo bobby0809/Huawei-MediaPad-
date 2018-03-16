@@ -22,7 +22,7 @@ import { Reference } from '../../src/api/Reference';
 import { Query } from '../../src/api/Query';
 import { ConnectionTarget } from '../../src/api/test_access';
 import { RepoInfo } from '../../src/core/RepoInfo';
-import { CONTAINER_KEY, Container } from "@firebase/ioc";
+import { CONTAINER_KEY, Container } from '@firebase/ioc';
 
 export const TEST_PROJECT = require('../../../../config/project.json');
 
@@ -49,7 +49,7 @@ export function patchFakeAuthFunctions(app) {
   container.register('auth', () => ({
     getToken: async () => token_,
     addAuthTokenListener: () => {},
-    removeAuthTokenListener: () => {},
+    removeAuthTokenListener: () => {}
   }));
 
   app[CONTAINER_KEY] = container;
@@ -155,7 +155,7 @@ export function testAuthTokenProvider(app) {
     },
     removeAuthTokenListener: () => {
       throw Error('removeAuthTokenListener not supported in testing');
-    },
+    }
   }));
 
   app[CONTAINER_KEY] = container;

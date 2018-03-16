@@ -1,6 +1,6 @@
-import { Container } from "../src/Container";
-import { expect } from "chai";
-import * as sinon from "sinon";
+import { Container } from '../src/Container';
+import { expect } from 'chai';
+import * as sinon from 'sinon';
 
 function sleep(time) {
   return new Promise(resolve => {
@@ -49,7 +49,7 @@ describe('Container Tests', () => {
       inst = new Container(app);
     });
     /**
-     * Clear the total number of 
+     * Clear the total number of
      */
     it('Should allow you to get a service, after it has been registered', () => {
       const limit = 20;
@@ -67,10 +67,10 @@ describe('Container Tests', () => {
         expect(inst.getImmediate(i)).to.deep.equal({ idx: i });
       }
     });
-    
+
     it('Should throw an error if a user attempts to register an invalid factoryFxn', () => {
       expect(() => {
-        (inst as any).register('test', { hello: 'world '});
+        (inst as any).register('test', { hello: 'world ' });
       }).to.throw();
     });
 
@@ -80,7 +80,6 @@ describe('Container Tests', () => {
         inst.register('test', () => ({}));
       }).to.throw();
     });
-
   });
   describe('`get` Tests', () => {
     /**
@@ -153,11 +152,11 @@ describe('Container Tests', () => {
       inst.register('b', () => {
         inst.getImmediate('a');
       });
-      
+
       let error = false;
       try {
         await inst.get('a');
-      } catch(err) {
+      } catch (err) {
         error = true;
       }
       expect(error, 'Dependency cycle was not detected').to.be.true;
@@ -194,7 +193,8 @@ describe('Container Tests', () => {
       }).to.throw();
     });
     it("Should not throw an error if a service is requested OPTIONALLY that doesn't exist", () => {
-      expect(inst.getImmediate("I don't exist", { optional: true })).to.not.be.ok;
+      expect(inst.getImmediate("I don't exist", { optional: true })).to.not.be
+        .ok;
     });
     it('Should properly pass the instance string, if defined', () => {
       const service = inst.getImmediate('test', { instance: 'special string' });
@@ -224,7 +224,9 @@ describe('Container Tests', () => {
     });
     it('Should return the cached custom instance', () => {
       const service = inst.getImmediate('test', { instance: 'special string' });
-      const service2 = inst.getImmediate('test', { instance: 'special string' });
+      const service2 = inst.getImmediate('test', {
+        instance: 'special string'
+      });
       expect(service).to.equal(service2);
     });
     it('Should throw an error if a cycle is detected', () => {

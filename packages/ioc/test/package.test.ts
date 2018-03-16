@@ -1,5 +1,5 @@
-import * as module from "../index";
-import { expect } from "chai";
+import * as module from '../index';
+import { expect } from 'chai';
 
 describe('@firebase/ioc Tests', () => {
   /**
@@ -7,7 +7,10 @@ describe('@firebase/ioc Tests', () => {
    */
   afterEach(() => {
     module.Container.instances.splice(0, module.Container.instances.length);
-    module.Container.registrations.splice(0, module.Container.registrations.length);
+    module.Container.registrations.splice(
+      0,
+      module.Container.registrations.length
+    );
   });
 
   describe('Exports', () => {
@@ -45,14 +48,14 @@ describe('@firebase/ioc Tests', () => {
     it('Should persist the registration of a service for future containers', () => {
       const i1 = new module.Container({} as any);
       const args = ['test', () => ({ hello: 'world' })];
-      (module as any).register(...args as any);
+      (module as any).register(...(args as any));
 
       expect(i1.getImmediate('test')).to.deep.equal({ hello: 'world' });
       expect(module.Container.registrations).to.have.length(1);
       expect(module.Container.registrations[0]).to.deep.equal(args);
 
       const i2 = new module.Container({} as any);
-      expect(i2.getImmediate('test')).to.deep.equal({ hello: 'world' });      
+      expect(i2.getImmediate('test')).to.deep.equal({ hello: 'world' });
     });
   });
 });

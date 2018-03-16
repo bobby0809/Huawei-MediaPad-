@@ -17,7 +17,7 @@
 import { FirebaseApp } from '@firebase/app-types';
 import { FirebaseAuthTokenData } from '@firebase/app-types/private';
 import { log, warn } from './util/util';
-import { injector } from "@firebase/ioc";
+import { injector } from '@firebase/ioc';
 
 /**
  * Abstraction around FirebaseApp's token fetching capabilities.
@@ -36,7 +36,7 @@ export class AuthTokenProvider {
     try {
       const { getToken } = injector(this.app_).getImmediate('auth');
       return getToken();
-    } catch(error) {
+    } catch (error) {
       // TODO: Need to figure out all the cases this is raised and whether
       // this makes sense.
 
@@ -60,10 +60,12 @@ export class AuthTokenProvider {
     try {
       const { addAuthTokenListener } = injector(this.app_).getImmediate('auth');
       addAuthTokenListener(listener);
-    } catch(er) {
-      injector(this.app_).get('auth').then(({ addAuthTokenListener }) => {
-        addAuthTokenListener(listener);
-      });
+    } catch (er) {
+      injector(this.app_)
+        .get('auth')
+        .then(({ addAuthTokenListener }) => {
+          addAuthTokenListener(listener);
+        });
       setTimeout(() => {
         listener(null);
       }, 0);
@@ -71,9 +73,11 @@ export class AuthTokenProvider {
   }
 
   removeTokenChangeListener(listener: (token: string | null) => void) {
-    injector(this.app_).get('auth').then(({ removeAuthTokenListener }) => {
-      removeAuthTokenListener(listener);
-    });
+    injector(this.app_)
+      .get('auth')
+      .then(({ removeAuthTokenListener }) => {
+        removeAuthTokenListener(listener);
+      });
   }
 
   notifyForInvalidToken() {

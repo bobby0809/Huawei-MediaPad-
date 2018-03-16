@@ -9,6 +9,7 @@
     "dev": "gulp dev",
     "test": "run-p test:browser",
     "test:browser": "karma start --single-run",
+    "test:browser:debug": "karma start --browsers Chrome --auto-watch",
     "prepare": "gulp build"
   },
   "license": "Apache-2.0",

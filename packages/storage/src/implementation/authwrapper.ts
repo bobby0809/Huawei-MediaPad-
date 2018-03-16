@@ -28,10 +28,8 @@ import { RequestMap } from './requestmap';
 import * as type from './type';
 import { XhrIoPool } from './xhriopool';
 import { FirebaseApp } from '@firebase/app-types';
-import {
-  _FirebaseApp,
-  FirebaseAuthTokenData
-} from '@firebase/app-types/private';
+import { FirebaseAuthTokenData } from '@firebase/app-types/private';
+import { injector } from "@firebase/ioc";
 
 /**
  * @param app If null, getAuthToken always resolves with null.
@@ -89,28 +87,13 @@ export class AuthWrapper {
     return loc.bucket;
   }
 
-  getAuthToken(): Promise<string | null> {
-    // TODO(andysoto): remove ifDef checks after firebase-app implements stubs
-    // (b/28673818).
-    if (
-      this.app_ !== null &&
-      type.isDef((this.app_ as _FirebaseApp).INTERNAL) &&
-      type.isDef((this.app_ as _FirebaseApp).INTERNAL.getToken)
-    ) {
-      return (this.app_ as _FirebaseApp).INTERNAL.getToken().then(
-        function(response: FirebaseAuthTokenData | null): string | null {
-          if (response !== null) {
-            return response.accessToken;
-          } else {
-            return null;
-          }
-        },
-        function(_error) {
-          return null;
-        }
-      );
-    } else {
-      return promiseimpl.resolve(null) as Promise<string | null>;
+  async getAuthToken(): Promise<string | null> {
+    try {
+      const { getToken } = injector(this.app_).getImmediate('auth');
+      const response = await getToken();
+      return response && response.accessToken || null;
+    } catch(err) {
+      return null;
     }
   }
 

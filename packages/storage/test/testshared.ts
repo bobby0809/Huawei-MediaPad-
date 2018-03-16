@@ -23,6 +23,7 @@ import * as type from '../src/implementation/type';
 import { Headers, XhrIo } from '../src/implementation/xhrio';
 import { XhrIoPool } from '../src/implementation/xhriopool';
 import { SendHook, StringHeaders, TestingXhrIo } from './xhrio';
+import { Container, CONTAINER_KEY } from "@firebase/ioc";
 
 export const authToken = 'totally-legit-auth-token';
 export const bucket = 'mybucket';
@@ -34,11 +35,15 @@ export function makeFakeApp(
   bucket_arg?: string
 ): FirebaseApp {
   const app: any = {};
-  app.INTERNAL = {};
-  app.INTERNAL.getToken = function() {
-    return promiseimpl.resolve(token);
-  };
+
+  const container = new Container(app);
+  container.register('auth', () => ({
+    getToken: async () => token
+  }));
+
+  app[CONTAINER_KEY] = container;
   app.options = {};
+
   if (type.isDef(bucket_arg)) {
     app.options[constants.configOption] = bucket_arg;
   } else {

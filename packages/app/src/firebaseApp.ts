@@ -73,21 +73,6 @@ class FirebaseAppImpl implements FirebaseApp {
   ) {
     this.name_ = name;
     this.options_ = deepCopy<FirebaseOptions>(options);
-    this.INTERNAL = {
-      getUid: () => null,
-      getToken: () => Promise.resolve(null),
-      addAuthTokenListener: (callback: (token: string | null) => void) => {
-        tokenListeners.push(callback);
-        // Make sure callback is called, asynchronously, in the absence of the auth module
-        setTimeout(() => callback(null), 0);
-      },
-      removeAuthTokenListener: callback => {
-        tokenListeners = tokenListeners.filter(
-          listener => listener !== callback
-        );
-      }
-    };
-
     this[CONTAINER_KEY] = new Container(this);
   }
 
@@ -175,22 +160,6 @@ class FirebaseAppImpl implements FirebaseApp {
   private extendApp(props: { [name: string]: any }): void {
     // Copy the object onto the FirebaseAppImpl prototype
     deepExtend(this, props);
-
-    /**
-     * If the app has overwritten the addAuthTokenListener stub, forward
-     * the active token listeners on to the true fxn.
-     *
-     * TODO: This function is required due to our current module
-     * structure. Once we are able to rely strictly upon a single module
-     * implementation, this code should be refactored and Auth should
-     * provide these stubs and the upgrade logic
-     */
-    if (props.INTERNAL && props.INTERNAL.addAuthTokenListener) {
-      tokenListeners.forEach(listener => {
-        this.INTERNAL.addAuthTokenListener(listener);
-      });
-      tokenListeners = [];
-    }
   }
 
   /**

@@ -17,6 +17,7 @@
 import { FirebaseApp } from '@firebase/app-types';
 import { FirebaseAuthTokenData } from '@firebase/app-types/private';
 import { log, warn } from './util/util';
+import { injector } from "@firebase/ioc";
 
 /**
  * Abstraction around FirebaseApp's token fetching capabilities.
@@ -31,31 +32,48 @@ export class AuthTokenProvider {
    * @param {boolean} forceRefresh
    * @return {!Promise<FirebaseAuthTokenData>}
    */
-  getToken(forceRefresh: boolean): Promise<FirebaseAuthTokenData> {
-    return this.app_['INTERNAL']['getToken'](forceRefresh).then(
-      null,
-      // .catch
-      function(error) {
-        // TODO: Need to figure out all the cases this is raised and whether
-        // this makes sense.
-        if (error && error.code === 'auth/token-not-initialized') {
-          log('Got auth/token-not-initialized error.  Treating as null token.');
-          return null;
-        } else {
-          return Promise.reject(error);
-        }
+  async getToken(forceRefresh: boolean): Promise<FirebaseAuthTokenData> {
+    try {
+      const { getToken } = injector(this.app_).getImmediate('auth');
+      return getToken();
+    } catch(error) {
+      // TODO: Need to figure out all the cases this is raised and whether
+      // this makes sense.
+
+      // if (error && error.code === 'ioc/not-exist') {
+      if (error && ~error.message.indexOf('not-exist')) {
+        return null;
+      } else if (error && error.code === 'auth/token-not-initialized') {
+        log('Got auth/token-not-initialized error.  Treating as null token.');
+        return null;
+      } else {
+        throw error;
       }
-    );
+    }
   }
 
   addTokenChangeListener(listener: (token: string | null) => void) {
-    // TODO: We might want to wrap the listener and call it with no args to
-    // avoid a leaky abstraction, but that makes removing the listener harder.
-    this.app_['INTERNAL']['addAuthTokenListener'](listener);
+    /**
+     * The original FirebaseApp stub called this function at least once, in the
+     * event that auth isn't on the page, we will replicate this behavior
+     */
+    try {
+      const { addAuthTokenListener } = injector(this.app_).getImmediate('auth');
+      addAuthTokenListener(listener);
+    } catch(er) {
+      injector(this.app_).get('auth').then(({ addAuthTokenListener }) => {
+        addAuthTokenListener(listener);
+      });
+      setTimeout(() => {
+        listener(null);
+      }, 0);
+    }
   }
 
   removeTokenChangeListener(listener: (token: string | null) => void) {
-    this.app_['INTERNAL']['removeAuthTokenListener'](listener);
+    injector(this.app_).get('auth').then(({ removeAuthTokenListener }) => {
+      removeAuthTokenListener(listener);
+    });
   }
 
   notifyForInvalidToken() {

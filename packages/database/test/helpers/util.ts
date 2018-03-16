@@ -22,6 +22,7 @@ import { Reference } from '../../src/api/Reference';
 import { Query } from '../../src/api/Query';
 import { ConnectionTarget } from '../../src/api/test_access';
 import { RepoInfo } from '../../src/core/RepoInfo';
+import { CONTAINER_KEY, Container } from "@firebase/ioc";
 
 export const TEST_PROJECT = require('../../../../config/project.json');
 
@@ -44,16 +45,14 @@ let numDatabases = 0;
 export function patchFakeAuthFunctions(app) {
   const token_ = null;
 
-  app['INTERNAL'] = app['INTERNAL'] || {};
+  const container = new Container(app);
+  container.register('auth', () => ({
+    getToken: async () => token_,
+    addAuthTokenListener: () => {},
+    removeAuthTokenListener: () => {},
+  }));
 
-  app['INTERNAL']['getToken'] = function(forceRefresh) {
-    return Promise.resolve(token_);
-  };
-
-  app['INTERNAL']['addAuthTokenListener'] = function(listener) {};
-
-  app['INTERNAL']['removeAuthTokenListener'] = function(listener) {};
-
+  app[CONTAINER_KEY] = container;
   return app;
 }
 
@@ -137,28 +136,29 @@ export function testAuthTokenProvider(app) {
   let hasNextToken_ = false;
   const listeners_ = [];
 
-  app['INTERNAL'] = app['INTERNAL'] || {};
+  const container = new Container(app);
+  container.register('auth', () => ({
+    getToken: async forceRefresh => {
+      if (forceRefresh && hasNextToken_) {
+        token_ = nextToken_;
+        hasNextToken_ = false;
+      }
+      return { accessToken: token_ };
+    },
+    addAuthTokenListener: listener => {
+      const token = token_;
+      listeners_.push(listener);
+      const async = Promise.resolve();
+      async.then(function() {
+        listener(token);
+      });
+    },
+    removeAuthTokenListener: () => {
+      throw Error('removeAuthTokenListener not supported in testing');
+    },
+  }));
 
-  app['INTERNAL']['getToken'] = function(forceRefresh) {
-    if (forceRefresh && hasNextToken_) {
-      token_ = nextToken_;
-      hasNextToken_ = false;
-    }
-    return Promise.resolve({ accessToken: token_ });
-  };
-
-  app['INTERNAL']['addAuthTokenListener'] = function(listener) {
-    const token = token_;
-    listeners_.push(listener);
-    const async = Promise.resolve();
-    async.then(function() {
-      listener(token);
-    });
-  };
-
-  app['INTERNAL']['removeAuthTokenListener'] = function(listener) {
-    throw Error('removeAuthTokenListener not supported in testing');
-  };
+  app[CONTAINER_KEY] = container;
 
   return {
     setToken: function(token) {

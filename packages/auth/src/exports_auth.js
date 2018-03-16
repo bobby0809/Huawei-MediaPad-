@@ -516,22 +516,33 @@ fireauth.exportlib.exportPrototypeMethods(
     throw new Error('Cannot find the firebase namespace; be sure to include ' +
         'firebase-app.js before this library.');
   } else {
+
+    var instMap = new Map();
+
     /** @type {!firebase.ServiceFactory} */
-    var factory = function(app, extendApp) {
-      var auth = new fireauth.Auth(app);
-      extendApp({
-        'INTERNAL': {
-          // Extend app.INTERNAL.getUid.
-          'getUid': goog.bind(auth.getUid, auth),
-          'getToken': goog.bind(auth.getIdTokenInternal, auth),
-          'addAuthTokenListener':
-              goog.bind(auth.addAuthTokenListenerInternal, auth),
-          'removeAuthTokenListener':
-              goog.bind(auth.removeAuthTokenListenerInternal, auth)
-        }
-      });
-      return auth;
+    var factory = function(app) {
+      if (!instMap.has(app)) {
+        instMap.set(app, new fireauth.Auth(app));
+      }
+      return instMap.get(app);
     };
+
+    register('auth', app => {
+      if (!instMap.has(app)) {
+        instMap.set(app, new fireauth.Auth(app));
+      }
+      
+      var auth = instMap.get(app);
+
+      return {
+        'getUid': goog.bind(auth.getUid, auth),
+        'getToken': goog.bind(auth.getIdTokenInternal, auth),
+        'addAuthTokenListener':
+          goog.bind(auth.addAuthTokenListenerInternal, auth),
+        'removeAuthTokenListener':
+          goog.bind(auth.removeAuthTokenListenerInternal, auth)
+      };
+    });
 
     var namespace = {
       'Auth': fireauth.Auth,

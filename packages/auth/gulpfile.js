@@ -28,6 +28,7 @@ const OPTIMIZATION_LEVEL = 'ADVANCED_OPTIMIZATIONS';
 // For minified builds, wrap the output so we avoid leaking global variables.
 const OUTPUT_WRAPPER = `(function() {
   var firebase = require('@firebase/app').default;
+  var register = require('@firebase/ioc').register;
   %output%
 }).call(typeof global !== 'undefined' ? global : typeof self !== 'undefined' ? self : typeof window !== 'undefined' ? window : {});`;
 
@@ -55,7 +56,8 @@ gulp.task('build-firebase-auth-js', () =>
           'externs/gapi.iframes.js',
           path.resolve(__dirname, '../firebase/externs/firebase-app-externs.js'),
           path.resolve(__dirname, '../firebase/externs/firebase-error-externs.js'),
-          path.resolve(__dirname, '../firebase/externs/firebase-app-internal-externs.js')
+          path.resolve(__dirname, '../firebase/externs/firebase-app-internal-externs.js'),
+          path.resolve(__dirname, '../ioc/externs/ioc-externs.js')
         ],
         language_out: 'ES5',
         only_closure_dependencies: true,

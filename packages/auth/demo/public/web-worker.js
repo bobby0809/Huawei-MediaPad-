@@ -1,4 +1,20 @@
 /**
+ * Copyright 2018 Google Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
  * @fileoverview Web worker for Firebase Auth test app application. The
  * web worker tries to run operations on the Auth instance for testing purposes.
  */
@@ -6,6 +22,11 @@
 importScripts('/dist/firebase-app.js');
 importScripts('/dist/firebase-auth.js');
 importScripts('config.js');
+
+// Polyfill Promise in case it is not supported.
+if (typeof Promise === 'undefined') {
+  var Promise = firebase.Promise;
+}
 
 // Initialize the Firebase app in the web worker.
 firebase.initializeApp(config);
@@ -163,7 +184,8 @@ self.onmessage = function(e) {
           self.postMessage(result);
         }).catch(function(error) {
           result.status = 'failure';
-          result.error = error;
+          // DataCloneError when postMessaging in IE11 and 10.
+          result.error = error.code ? error : error.message;
           self.postMessage(result);
         });
         break;

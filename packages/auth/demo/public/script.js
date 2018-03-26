@@ -1146,9 +1146,11 @@ function populateActionCodes() {
 /**
  * Provides basic Database checks for authenticated and unauthenticated access.
  * The Database node being tested has the following rule:
- * "$user_id": {
- *   ".read": "$user_id === auth.uid",
- *   ".write": "$user_id === auth.uid"
+ * "users": {
+ *   "$user_id": {
+ *     ".read": "$user_id === auth.uid",
+ *     ".write": "$user_id === auth.uid"
+ *   }
  * }
  * This applies when Real-time database service is available.
  */
@@ -1226,12 +1228,22 @@ function onRunWebWorkTests() {
     return;
   }
   var onError = function(error) {
-    alertError('Error: ' + error.code);
+    alertError('Error code: ' + error.code + ' message: ' + error.message);
   };
   auth.signInWithPopup(new firebase.auth.GoogleAuthProvider())
       .then(function(result) {
         runWebWorkerTests(result.credential.idToken);
       }, onError);
+}
+
+
+/** Runs service worker tests if supported. */
+function onRunServiceWorkTests() {
+  $.ajax('/checkIfAuthenticated').then(function(data, textStatus, jqXHR) {
+    alertSuccess('User authenticated: ' + data.uid);
+  }, function(jqXHR, textStatus, errorThrown) {
+    alertError(jqXHR.status + ': ' + JSON.stringify(jqXHR.responseJSON));
+  });
 }
 
 
@@ -1394,6 +1406,7 @@ function initApp(){
   $('#fetch-sign-in-methods-for-email').click(onFetchSignInMethodsForEmail);
 
   $('#run-web-worker-tests').click(onRunWebWorkTests);
+  $('#run-service-worker-tests').click(onRunServiceWorkTests);
 }
 
 $(initApp);

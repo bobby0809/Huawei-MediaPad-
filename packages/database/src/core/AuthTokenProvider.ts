@@ -17,7 +17,7 @@
 import { FirebaseApp } from '@firebase/app-types';
 import { FirebaseAuthTokenData } from '@firebase/app-types/private';
 import { log, warn } from './util/util';
-import { injector } from '@firebase/ioc';
+import { injector } from '@firebase/injector';
 
 /**
  * Abstraction around FirebaseApp's token fetching capabilities.

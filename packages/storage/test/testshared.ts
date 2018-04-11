@@ -23,7 +23,7 @@ import * as type from '../src/implementation/type';
 import { Headers, XhrIo } from '../src/implementation/xhrio';
 import { XhrIoPool } from '../src/implementation/xhriopool';
 import { SendHook, StringHeaders, TestingXhrIo } from './xhrio';
-import { Container, CONTAINER_KEY } from '@firebase/ioc';
+import { Container, CONTAINER_KEY } from '@firebase/injector';
 
 export const authToken = 'totally-legit-auth-token';
 export const bucket = 'mybucket';

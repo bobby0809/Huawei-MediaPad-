@@ -17,7 +17,7 @@
 import * as module from '../index';
 import { expect } from 'chai';
 
-describe('@firebase/ioc Tests', () => {
+describe('@firebase/injector Tests', () => {
   /**
    * Clear the cached state after each run
    */

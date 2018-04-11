@@ -29,7 +29,7 @@ import * as type from './type';
 import { XhrIoPool } from './xhriopool';
 import { FirebaseApp } from '@firebase/app-types';
 import { FirebaseAuthTokenData } from '@firebase/app-types/private';
-import { injector } from '@firebase/ioc';
+import { injector } from '@firebase/injector';
 
 /**
  * @param app If null, getAuthToken always resolves with null.

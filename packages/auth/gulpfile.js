@@ -28,7 +28,7 @@ const OPTIMIZATION_LEVEL = 'ADVANCED_OPTIMIZATIONS';
 // For minified builds, wrap the output so we avoid leaking global variables.
 const OUTPUT_WRAPPER = `(function() {
   var firebase = require('@firebase/app').default;
-  var register = require('@firebase/ioc').register;
+  var register = require('@firebase/injector').register;
   %output%
 }).call(typeof global !== 'undefined' ? global : typeof self !== 'undefined' ? self : typeof window !== 'undefined' ? window : {});`;
 

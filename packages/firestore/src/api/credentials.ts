@@ -18,7 +18,7 @@ import { User } from '../auth/user';
 import { assert } from '../util/assert';
 import { Code, FirestoreError } from '../util/error';
 import { FirebaseApp } from '@firebase/app-types';
-import { injector } from '@firebase/ioc';
+import { injector } from '@firebase/injector';
 
 // TODO(mikelehen): This should be split into multiple files and probably
 // moved to an auth/ folder to match other platforms.

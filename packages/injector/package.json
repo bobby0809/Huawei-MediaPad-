@@ -1,5 +1,5 @@
 {
-  "name": "@firebase/ioc",
+  "name": "@firebase/injector",
   "version": "0.1.0",
   "private": true,
   "description": "An IoC package for Firebase component interop",

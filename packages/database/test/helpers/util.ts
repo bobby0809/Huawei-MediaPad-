@@ -22,7 +22,7 @@ import { Reference } from '../../src/api/Reference';
 import { Query } from '../../src/api/Query';
 import { ConnectionTarget } from '../../src/api/test_access';
 import { RepoInfo } from '../../src/core/RepoInfo';
-import { CONTAINER_KEY, Container } from '@firebase/ioc';
+import { CONTAINER_KEY, Container } from '@firebase/injector';
 
 export const TEST_PROJECT = require('../../../../config/project.json');
 

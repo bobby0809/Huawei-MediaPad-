@@ -15,6 +15,7 @@
   },
   "license": "Apache-2.0",
   "dependencies": {
+    "@firebase/injector": "0.1.0",    
     "@firebase/storage-types": "0.1.2",
     "tslib": "^1.9.0"
   },

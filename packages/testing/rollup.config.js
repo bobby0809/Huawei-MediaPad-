@@ -23,12 +23,13 @@ const plugins = [
   })
 ];
 
-const external = Object.keys(
+const deps = Object.keys(
   Object.assign({}, pkg.peerDependencies, pkg.dependencies)
 );
+
 export default {
   input: 'index.ts',
   output: [{ file: pkg.main, format: 'cjs' }],
   plugins,
-  external
+  external: id => deps.some(dep => id === dep || id.startsWith(`${dep}/`))
 };

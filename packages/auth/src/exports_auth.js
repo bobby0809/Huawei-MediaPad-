@@ -19,10 +19,12 @@ goog.provide('fireauth.exports');
 goog.require('fireauth.Auth');
 goog.require('fireauth.AuthError');
 goog.require('fireauth.AuthErrorWithCredential');
+goog.require('fireauth.AuthSettings');
 goog.require('fireauth.AuthUser');
 goog.require('fireauth.ConfirmationResult');
 goog.require('fireauth.EmailAuthProvider');
 goog.require('fireauth.FacebookAuthProvider');
+goog.require('fireauth.GRecaptchaMockFactory');
 goog.require('fireauth.GithubAuthProvider');
 goog.require('fireauth.GoogleAuthProvider');
 goog.require('fireauth.InvalidOriginError');
@@ -322,6 +324,23 @@ fireauth.exportlib.exportPrototypeMethods(
       }
     });
 
+// Ensure internal grecaptcha mock API do not get obfuscated.
+fireauth.exportlib.exportPrototypeMethods(
+    fireauth.GRecaptchaMockFactory.prototype, {
+      execute: {
+        name: 'execute'
+      },
+      render: {
+        name: 'render'
+      },
+      reset: {
+        name: 'reset'
+      },
+      getResponse: {
+        name: 'getResponse'
+      }
+    });
+
 fireauth.exportlib.exportPrototypeMethods(
     goog.Promise.prototype, {
       thenAlways: {
@@ -332,6 +351,14 @@ fireauth.exportlib.exportPrototypeMethods(
       },
       then: {
         name: 'then'
+      }
+    });
+
+fireauth.exportlib.exportPrototypeProperties(
+    fireauth.AuthSettings.prototype, {
+      'appVerificationDisabled': {
+        name: 'appVerificationDisabledForTesting',
+        arg: fireauth.args.bool('appVerificationDisabledForTesting')
       }
     });
 

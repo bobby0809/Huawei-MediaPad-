@@ -1279,6 +1279,18 @@ function onRunServiceWorkTests() {
 }
 
 
+/** Applies selected auth settings change. */
+function onApplyAuthSettingsChange() {
+  try {
+    auth.settings.appVerificationDisabledForTesting =
+        $("input[name=enable-app-verification]:checked").val() == 'No';
+    alertSuccess('Auth settings changed');
+  } catch (error) {
+    alertError('Error: ' + error.code);
+  }
+}
+
+
 /**
  * Initiates the application by setting event listeners on the various buttons.
  */
@@ -1443,6 +1455,8 @@ function initApp(){
 
   $('#run-web-worker-tests').click(onRunWebWorkTests);
   $('#run-service-worker-tests').click(onRunServiceWorkTests);
+
+  $('#apply-auth-settings-change').click(onApplyAuthSettingsChange);
 }
 
 $(initApp);

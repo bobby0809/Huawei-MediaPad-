@@ -35,6 +35,7 @@ goog.require('fireauth.TwitterAuthProvider');
 goog.require('fireauth.args');
 goog.require('fireauth.authStorage.Persistence');
 goog.require('fireauth.exportlib');
+goog.require('fireauth.grecaptcha');
 goog.require('fireauth.idp.ProviderId');
 goog.require('goog.Promise');
 
@@ -327,6 +328,22 @@ fireauth.exportlib.exportPrototypeMethods(
 // Ensure internal grecaptcha mock API do not get obfuscated.
 fireauth.exportlib.exportPrototypeMethods(
     fireauth.GRecaptchaMockFactory.prototype, {
+      execute: {
+        name: 'execute'
+      },
+      render: {
+        name: 'render'
+      },
+      reset: {
+        name: 'reset'
+      },
+      getResponse: {
+        name: 'getResponse'
+      }
+    });
+
+fireauth.exportlib.exportPrototypeMethods(
+    fireauth.grecaptcha.prototype, {
       execute: {
         name: 'execute'
       },

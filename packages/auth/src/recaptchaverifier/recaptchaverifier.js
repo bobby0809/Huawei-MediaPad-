@@ -74,7 +74,9 @@ fireauth.BaseRecaptchaVerifier = function(apiKey, container, opt_parameters,
   this.destroyed_ = false;
   /** @private {!Element|string} The reCAPTCHA container. */
   this.container_ = container;
-  /** @private {?grecaptcha} The reCAPTCHA client library namespace. */
+  /**
+   * @private {?fireauth.grecaptcha} The reCAPTCHA client library namespace.
+   */
   this.grecaptcha_ = null;
   /**
    * @const @private {!fireauth.RecaptchaLoader} The grecaptcha loader.

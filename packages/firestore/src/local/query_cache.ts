@@ -120,7 +120,6 @@ export interface QueryCache extends GarbageSource {
     query: Query
   ): PersistencePromise<QueryData | null>;
 
-
   /**
    * Looks up a Query entry in the cache.
    *
@@ -131,8 +130,8 @@ export interface QueryCache extends GarbageSource {
    * the query.
    */
   getQuery(
-      transaction: PersistenceTransaction,
-      targetId: TargetId
+    transaction: PersistenceTransaction,
+    targetId: TargetId
   ): PersistencePromise<Query | null>;
 
   /**

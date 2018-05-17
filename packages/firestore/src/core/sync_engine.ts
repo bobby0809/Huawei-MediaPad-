@@ -93,8 +93,6 @@ class QueryView {
      * to continue receiving new doc changes for the query.
      */
     public resumeToken: ProtoByteString,
-
-
     public snapshotVersion: SnapshotVersion,
     /**
      * The view is responsible for computing the final merged truth of what
@@ -598,32 +596,33 @@ export class SyncEngine implements RemoteSyncer, SharedClientStateSyncer {
     this.queryViewsByQuery.forEach((_, queryView) => {
       if (this.sharedClientState.hasLocalQueryTarget(queryView.targetId)) {
         queriesProcessed.push(
-            Promise.resolve()
-                .then(() => {
-                  const viewDocChanges = queryView.view.computeDocChanges(changes);
-                  if (!viewDocChanges.needsRefill) {
-                    return viewDocChanges;
-                  }
-                  // The query has a limit and some docs were removed, so we need
-                  // to re-run the query against the local store to make sure we
-                  // didn't lose any good docs that had been past the limit.
-                  return this.localStore.executeQuery(queryView.query).then(docs => {
-                    return queryView.view.computeDocChanges(docs, viewDocChanges);
-                  });
-                })
-                .then((viewDocChanges: ViewDocumentChanges) => {
-                  const viewChange = queryView.view.applyChanges(
-                      viewDocChanges
-                  );
+          Promise.resolve()
+            .then(() => {
+              const viewDocChanges = queryView.view.computeDocChanges(changes);
+              if (!viewDocChanges.needsRefill) {
+                return viewDocChanges;
+              }
+              // The query has a limit and some docs were removed, so we need
+              // to re-run the query against the local store to make sure we
+              // didn't lose any good docs that had been past the limit.
+              return this.localStore
+                .executeQuery(queryView.query)
+                .then(docs => {
+                  return queryView.view.computeDocChanges(docs, viewDocChanges);
+                });
+            })
+            .then((viewDocChanges: ViewDocumentChanges) => {
+              const viewChange = queryView.view.applyChanges(viewDocChanges);
 
-                  if (viewChange.snapshot) {
-                    newSnaps.push(viewChange.snapshot);
-                    const docChanges = LocalViewChanges.fromSnapshot(
-                        viewChange.snapshot
-                    );
-                    docChangesInAllViews.push(docChanges);
-                  }
-                }));
+              if (viewChange.snapshot) {
+                newSnaps.push(viewChange.snapshot);
+                const docChanges = LocalViewChanges.fromSnapshot(
+                  viewChange.snapshot
+                );
+                docChangesInAllViews.push(docChanges);
+              }
+            })
+        );
       }
     });
 
@@ -666,7 +665,9 @@ export class SyncEngine implements RemoteSyncer, SharedClientStateSyncer {
               viewChange.limboChanges
             ).then(() => {
               if (viewChange.snapshot) {
-                if (this.sharedClientState.hasLocalQueryTarget(queryView.targetId)) {
+                if (
+                  this.sharedClientState.hasLocalQueryTarget(queryView.targetId)
+                ) {
                   newSnaps.push(viewChange.snapshot);
                 }
                 const docChanges = LocalViewChanges.fromSnapshot(
@@ -732,7 +733,7 @@ export class SyncEngine implements RemoteSyncer, SharedClientStateSyncer {
     targetId: TargetId,
     state: QueryTargetState,
     error?: FirestoreError
-  ) : Promise<void>{
+  ): Promise<void> {
     if (this.isPrimary) {
       if (state === 'pending') {
         const query = await this.localStore.getQuery(targetId);
@@ -752,8 +753,11 @@ export class SyncEngine implements RemoteSyncer, SharedClientStateSyncer {
           lastSnapshotVersion = queryView.snapshotVersion;
         }
 
-        const affectedDocuments = await this.localStore.getQueryChanges(targetId, lastSnapshotVersion);
-        await this.emitNewSnaps(affectedDocuments)
+        const affectedDocuments = await this.localStore.getQueryChanges(
+          targetId,
+          lastSnapshotVersion
+        );
+        await this.emitNewSnaps(affectedDocuments);
       }
 
       // TODO(multitab): Rejected

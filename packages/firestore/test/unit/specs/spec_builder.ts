@@ -99,7 +99,6 @@ export class SpecBuilder {
   // until nextStep() is called to append it to steps.
   protected currentStep: SpecStep | null = null;
 
-
   private steps: SpecStep[] = [];
 
   private readonly currentClientState: ClientMemoryState = new ClientMemoryState();
@@ -182,7 +181,6 @@ export class SpecBuilder {
     };
     return this;
   }
-
 
   watchOpens(query: Query): this {
     this.nextStep();

@@ -389,15 +389,20 @@ export class IndexedDbQueryCache implements QueryCache {
     return PersistencePromise.waitFor(promises);
   }
 
-  getQuery(transaction: PersistenceTransaction, targetId: TargetId): PersistencePromise<Query | null> {
-    return targetsStore(transaction).get(targetId).next(found => {
-      if (found) {
-        const target = this.serializer.fromDbTarget(found);
-        return target.query;
-      } else {
-        return null;
-      }
-    });
+  getQuery(
+    transaction: PersistenceTransaction,
+    targetId: TargetId
+  ): PersistencePromise<Query | null> {
+    return targetsStore(transaction)
+      .get(targetId)
+      .next(found => {
+        if (found) {
+          const target = this.serializer.fromDbTarget(found);
+          return target.query;
+        } else {
+          return null;
+        }
+      });
   }
 }
 

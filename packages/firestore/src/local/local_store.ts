@@ -51,7 +51,7 @@ import { ReferenceSet } from './reference_set';
 import { RemoteDocumentCache } from './remote_document_cache';
 import { RemoteDocumentChangeBuffer } from './remote_document_change_buffer';
 import { ClientId } from './shared_client_state';
-import {safeIsNaN} from '../util/types';
+import { safeIsNaN } from '../util/types';
 
 const LOG_TAG = 'LocalStore';
 
@@ -895,16 +895,23 @@ export class LocalStore {
   }
 
   // PORTING NOTE: Multi tab.
-  getQuery(targetId: TargetId) : Promise<Query|null> {
+  getQuery(targetId: TargetId): Promise<Query | null> {
     return this.persistence.runTransaction('Get query', false, txn => {
       return this.queryCache.getQuery(txn, targetId);
     });
   }
 
-    // PORTING NOTE: Multi tab.
-  getQueryChanges(targetId: TargetId, lastSnapshotVersion: SnapshotVersion) : Promise<MaybeDocumentMap> {
+  // PORTING NOTE: Multi tab.
+  getQueryChanges(
+    targetId: TargetId,
+    lastSnapshotVersion: SnapshotVersion
+  ): Promise<MaybeDocumentMap> {
     return this.persistence.runTransaction('Get query changes', false, txn => {
-      return this.queryCache.getChangesSince(txn, targetId, lastSnapshotVersion).next(changedKeys => this.localDocuments.getDocuments(txn, changedKeys));
+      return this.queryCache
+        .getChangesSince(txn, targetId, lastSnapshotVersion)
+        .next(changedKeys =>
+          this.localDocuments.getDocuments(txn, changedKeys)
+        );
     });
   }
 }

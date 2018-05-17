@@ -503,8 +503,8 @@ abstract class TestRunner {
   private doStep(step: SpecStep): Promise<void> {
     if ('userListen' in step) {
       return this.doListen(step.userListen!);
-    }  else  if ('watchOpens' in step) {
-        return this.doOpen(step.watchOpens!);
+    } else if ('watchOpens' in step) {
+      return this.doOpen(step.watchOpens!);
     } else if ('userUnlisten' in step) {
       return this.doUnlisten(step.userUnlisten!);
     } else if ('userSet' in step) {
@@ -603,14 +603,13 @@ abstract class TestRunner {
     const queryListener = new QueryListener(query, aggregator, options);
     this.queryListeners.set(query, queryListener);
 
-
     // Skip the backoff that may have been triggered by a previous call to
     // `watchStreamCloses()`.
     if (
-        this.queue.containsDelayedOperation(TimerId.ListenStreamConnectionBackoff)
+      this.queue.containsDelayedOperation(TimerId.ListenStreamConnectionBackoff)
     ) {
       await this.queue.runDelayedOperationsEarly(
-          TimerId.ListenStreamConnectionBackoff
+        TimerId.ListenStreamConnectionBackoff
       );
     }
 

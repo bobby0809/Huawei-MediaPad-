@@ -133,7 +133,7 @@ class TestSharedClientSyncer implements SharedClientStateSyncer {
     targetId: TargetId,
     state: QueryTargetState,
     error?: FirestoreError
-  ) {
+  ) :Promise<void> {
     switch (state) {
       case 'pending':
         this.pendingTargets.push(targetId);

@@ -154,6 +154,8 @@ export interface SharedClientState {
     removedBatchIds: BatchId[],
     addedBatchIds: BatchId[]
   ): void;
+
+  hasLocalQueryTarget(targetId: TargetId): boolean;
 }
 
 /**
@@ -670,6 +672,10 @@ export class WebStorageSharedClientState implements SharedClientState {
     // TODO(multitab): Call `unlisten` on the primary tab.
   }
 
+  hasLocalQueryTarget(targetId: TargetId): boolean {
+    return this.localClientState.activeTargetIds.has(targetId);
+  }
+
   trackQueryUpdate(
     targetId: BatchId,
     state: 'active' | 'inactive' | 'rejected',
@@ -937,6 +943,10 @@ export class MemorySharedClientState implements SharedClientState {
 
   addLocalQueryTarget(targetId: TargetId): void {
     this.localState.addQueryTarget(targetId);
+  }
+
+  hasLocalQueryTarget(targetId: TargetId): boolean {
+    return this.localState.activeTargetIds.has(targetId);
   }
 
   trackQueryUpdate(

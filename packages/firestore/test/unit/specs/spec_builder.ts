@@ -99,6 +99,7 @@ export class SpecBuilder {
   // until nextStep() is called to append it to steps.
   protected currentStep: SpecStep | null = null;
 
+
   private steps: SpecStep[] = [];
 
   private readonly currentClientState: ClientMemoryState = new ClientMemoryState();
@@ -177,6 +178,33 @@ export class SpecBuilder {
     };
     this.currentStep = {
       userListen: [targetId, SpecBuilder.queryToSpec(query)],
+      stateExpect: { activeTargets: objUtils.shallowCopy(this.activeTargets) }
+    };
+    return this;
+  }
+
+
+  watchOpens(query: Query): this {
+    this.nextStep();
+
+    let targetId: TargetId = 0;
+    if (objUtils.contains(this.queryMapping, query.canonicalId())) {
+      if (this.config.useGarbageCollection) {
+        throw new Error('Listening to same query twice: ' + query);
+      } else {
+        targetId = this.queryMapping[query.canonicalId()];
+      }
+    } else {
+      targetId = this.queryIdGenerator.next();
+    }
+
+    this.queryMapping[query.canonicalId()] = targetId;
+    this.activeTargets[targetId] = {
+      query: SpecBuilder.queryToSpec(query),
+      resumeToken: ''
+    };
+    this.currentStep = {
+      watchOpens: [targetId, SpecBuilder.queryToSpec(query)],
       stateExpect: { activeTargets: objUtils.shallowCopy(this.activeTargets) }
     };
     return this;

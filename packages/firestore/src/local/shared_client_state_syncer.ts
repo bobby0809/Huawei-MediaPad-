@@ -43,7 +43,7 @@ export interface SharedClientStateSyncer {
     targetId: TargetId,
     state: QueryTargetState,
     error?: FirestoreError
-  );
+  ): Promise<void>;
 
   /** Returns the IDs of the clients that are currently active. */
   getActiveClients(): Promise<ClientId[]>;

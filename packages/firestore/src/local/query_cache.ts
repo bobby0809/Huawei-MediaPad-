@@ -120,6 +120,21 @@ export interface QueryCache extends GarbageSource {
     query: Query
   ): PersistencePromise<QueryData | null>;
 
+
+  /**
+   * Looks up a Query entry in the cache.
+   *
+   * Multi-Tab Note: This operation is safe to use from secondary clients.
+   *
+   * @param query The query corresponding to the entry to look up.
+   * @return The cached QueryData entry, or null if the cache has no entry for
+   * the query.
+   */
+  getQuery(
+      transaction: PersistenceTransaction,
+      targetId: TargetId
+  ): PersistencePromise<Query | null>;
+
   /**
    * Applies the target change event to the cached query results of the given
    * target.

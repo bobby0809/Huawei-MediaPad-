@@ -154,11 +154,24 @@ export class MemoryQueryCache implements QueryCache {
   }
 
   getQueryData(
-    transaction: PersistenceTransaction,
-    query: Query
+      transaction: PersistenceTransaction,
+      query: Query
   ): PersistencePromise<QueryData | null> {
     const queryData = this.queries.get(query) || null;
     return PersistencePromise.resolve(queryData);
+  }
+
+
+  getQuery(
+      transaction: PersistenceTransaction,
+      targetId: TargetId
+  ): PersistencePromise<Query | null> {
+    this.queries.forEach((query, queryData) => {
+      if (queryData.targetId === targetId) {
+        return PersistencePromise.resolve(query);
+      }
+    });
+    return PersistencePromise.resolve(null);
   }
 
   private addMatchingKeys(

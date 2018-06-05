@@ -1071,10 +1071,10 @@ abstract class TestRunner {
       expect(actualTarget.resumeToken).to.equal(expectedTarget.resumeToken);
       delete actualTargets[targetId];
     });
-    // expect(obj.size(actualTargets)).to.equal(
-    //   0,
-    //   'Unexpected active targets: ' + JSON.stringify(actualTargets)
-    // );
+    expect(obj.size(actualTargets)).to.equal(
+      0,
+      'Unexpected active targets: ' + JSON.stringify(actualTargets)
+    );
   }
 
   private validateWatchExpectation(

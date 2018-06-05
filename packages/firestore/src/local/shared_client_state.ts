@@ -18,17 +18,18 @@ import { Code, FirestoreError } from '../util/error';
 import { BatchId, MutationBatchState, TargetId } from '../core/types';
 import { assert } from '../util/assert';
 import { debug, error } from '../util/log';
-import { min, primitiveComparator } from '../util/misc';
+import { min } from '../util/misc';
 import { SortedSet } from '../util/sorted_set';
 import { isSafeInteger } from '../util/types';
 import * as objUtils from '../util/obj';
 import { User } from '../auth/user';
 import {
-  SharedClientStateSyncer,
-  QueryTargetState
+  QueryTargetState,
+  SharedClientStateSyncer
 } from './shared_client_state_syncer';
 import { AsyncQueue } from '../util/async_queue';
 import { Platform } from '../platform/platform';
+import { batchIdSet, TargetIdSet, targetIdSet } from '../model/collections';
 
 const LOG_TAG = 'SharedClientState';
 
@@ -46,7 +47,7 @@ const CLIENT_STATE_KEY_PREFIX = 'fs_clients';
 // contain.
 const MUTATION_BATCH_KEY_PREFIX = 'fs_mutations';
 
-// The format of the LocalStorage key that stores the target metadata is:
+// The format of the LocalStorage key that stores a query target's metadata is:
 //     fs_targets_<persistence_prefix>_<target_id>
 const QUERY_TARGET_KEY_PREFIX = 'fs_targets';
 
@@ -116,14 +117,14 @@ export interface SharedClientState {
   removeLocalQueryTarget(targetId: TargetId): void;
 
   /**
-   * Records that a query target has been updated.
+   * Processes an update to a query target.
    *
-   * Called by the primary client to notify secondary clients of updates to
-   * existing watch targets.
+   * Called by the primary client to notify secondary clients of document
+   * changes or state transitions that affect the provided query target.
    */
   trackQueryUpdate(
     targetId: TargetId,
-    state: 'active' | 'inactive' | 'rejected',
+    state: QueryTargetState,
     error?: FirestoreError
   ): void;
 
@@ -154,8 +155,6 @@ export interface SharedClientState {
     removedBatchIds: BatchId[],
     addedBatchIds: BatchId[]
   ): void;
-
-  hasLocalQueryTarget(targetId: TargetId): boolean;
 }
 
 /**
@@ -255,18 +254,20 @@ export class MutationMetadata {
  * serialization. The TargetId is omitted as it is encoded as part of the key.
  */
 interface QueryTargetStateSchema {
+  lastUpdateTime: number;
   state: QueryTargetState;
   error?: { code: string; message: string }; // Only set when state === 'rejected'
 }
 
 /**
  * Holds the state of a query target, including its target ID and whether the
- * target is 'pending', 'active', 'inactive' or 'rejected'.
+ * target is 'not-current', 'current' or 'rejected'.
  */
 // Visible for testing
 export class QueryTargetMetadata {
   constructor(
     readonly targetId: TargetId,
+    readonly lastUpdateTime: Date,
     readonly state: QueryTargetState,
     readonly error?: FirestoreError
   ) {
@@ -288,9 +289,9 @@ export class QueryTargetMetadata {
 
     let validData =
       typeof targetState === 'object' &&
-      ['pending', 'active', 'inactive', 'rejected'].indexOf(
-        targetState.state
-      ) !== -1 &&
+      isSafeInteger(targetState.lastUpdateTime) &&
+      ['not-current', 'current', 'rejected'].indexOf(targetState.state) !==
+        -1 &&
       (targetState.error === undefined ||
         typeof targetState.error === 'object');
 
@@ -311,6 +312,7 @@ export class QueryTargetMetadata {
     if (validData) {
       return new QueryTargetMetadata(
         targetId,
+        new Date(targetState.lastUpdateTime),
         targetState.state,
         firestoreError
       );
@@ -325,6 +327,7 @@ export class QueryTargetMetadata {
 
   toLocalStorageJSON(): string {
     const targetState: QueryTargetStateSchema = {
+      lastUpdateTime: this.lastUpdateTime.getTime(),
       state: this.state
     };
 
@@ -358,7 +361,7 @@ interface ClientStateSchema {
  */
 // Visible for testing.
 export interface ClientState {
-  readonly activeTargetIds: SortedSet<TargetId>;
+  readonly activeTargetIds: TargetIdSet;
   readonly lastUpdateTime: Date;
   readonly maxMutationBatchId: BatchId | null;
   readonly minMutationBatchId: BatchId | null;
@@ -373,7 +376,7 @@ class RemoteClientState implements ClientState {
   private constructor(
     readonly clientId: ClientId,
     readonly lastUpdateTime: Date,
-    readonly activeTargetIds: SortedSet<TargetId>,
+    readonly activeTargetIds: TargetIdSet,
     readonly minMutationBatchId: BatchId | null,
     readonly maxMutationBatchId: BatchId | null
   ) {}
@@ -397,7 +400,7 @@ class RemoteClientState implements ClientState {
       (clientState.maxMutationBatchId === null ||
         isSafeInteger(clientState.maxMutationBatchId));
 
-    let activeTargetIdsSet = new SortedSet<TargetId>(primitiveComparator);
+    let activeTargetIdsSet = targetIdSet();
 
     for (let i = 0; validData && i < clientState.activeTargetIds.length; ++i) {
       validData = isSafeInteger(clientState.activeTargetIds[i]);
@@ -436,10 +439,10 @@ class RemoteClientState implements ClientState {
  */
 // Visible for testing.
 export class LocalClientState implements ClientState {
-  activeTargetIds = new SortedSet<TargetId>(primitiveComparator);
+  activeTargetIds = targetIdSet();
   lastUpdateTime: Date;
 
-  private pendingBatchIds = new SortedSet<BatchId>(primitiveComparator);
+  private pendingBatchIds = batchIdSet();
 
   constructor() {
     this.lastUpdateTime = new Date();
@@ -624,8 +627,8 @@ export class WebStorageSharedClientState implements SharedClientState {
     return minMutationBatch;
   }
 
-  getAllActiveQueryTargets(): SortedSet<TargetId> {
-    let activeTargets = new SortedSet<TargetId>(primitiveComparator);
+  getAllActiveQueryTargets(): TargetIdSet {
+    let activeTargets = targetIdSet();
     objUtils.forEach(this.activeClients, (key, value) => {
       activeTargets = activeTargets.unionWith(value.activeTargetIds);
     });
@@ -662,23 +665,18 @@ export class WebStorageSharedClientState implements SharedClientState {
 
   addLocalQueryTarget(targetId: TargetId): void {
     this.localClientState.addQueryTarget(targetId);
-    this.persistQueryTargetState(targetId, 'pending');
     this.persistClientState();
   }
 
   removeLocalQueryTarget(targetId: TargetId): void {
     this.localClientState.removeQueryTarget(targetId);
     this.persistClientState();
-    // TODO(multitab): Call `unlisten` on the primary tab.
-  }
-
-  hasLocalQueryTarget(targetId: TargetId): boolean {
-    return this.localClientState.activeTargetIds.has(targetId);
+    // TODO(multitab): Remove the query state from Local Storage.
   }
 
   trackQueryUpdate(
-    targetId: BatchId,
-    state: 'active' | 'inactive' | 'rejected',
+    targetId: TargetId,
+    state: QueryTargetState,
     error?: FirestoreError
   ): void {
     this.persistQueryTargetState(targetId, state, error);
@@ -730,7 +728,7 @@ export class WebStorageSharedClientState implements SharedClientState {
               event.newValue
             );
             if (clientState) {
-              this.activeClients[clientState.clientId] = clientState;
+              return this.handleClientStateEvent(clientState);
             }
           } else {
             const clientId = this.fromLocalStorageClientStateKey(event.key);
@@ -804,9 +802,14 @@ export class WebStorageSharedClientState implements SharedClientState {
     state: QueryTargetState,
     error?: FirestoreError
   ): void {
-    const targetMetadata = new QueryTargetMetadata(targetId, state, error);
+    const targetMetadata = new QueryTargetMetadata(
+      targetId,
+      /* lastUpdateTime= */ new Date(),
+      state,
+      error
+    );
 
-    let targetKey = `${QUERY_TARGET_KEY_PREFIX}_${
+    const targetKey = `${QUERY_TARGET_KEY_PREFIX}_${
       this.persistenceKey
     }_${targetId}`;
 
@@ -874,7 +877,7 @@ export class WebStorageSharedClientState implements SharedClientState {
     value: string
   ): QueryTargetMetadata | null {
     const match = this.queryTargetKeyRe.exec(key);
-    assert(match !== null, `Cannot parse watch target key '${key}'`);
+    assert(match !== null, `Cannot parse query target key '${key}'`);
 
     const targetId = Number(match[1]);
     return QueryTargetMetadata.fromLocalStorageEntry(targetId, value);
@@ -898,11 +901,42 @@ export class WebStorageSharedClientState implements SharedClientState {
     );
   }
 
-  private handleQueryTargetEvent(targetMetadata: QueryTargetMetadata) {
+  private handleQueryTargetEvent(
+    targetMetadata: QueryTargetMetadata
+  ): Promise<void> {
     return this.syncEngine.applyTargetState(
       targetMetadata.targetId,
       targetMetadata.state,
       targetMetadata.error
+    );
+  }
+
+  private handleClientStateEvent(
+    clientState: RemoteClientState
+  ): Promise<void> {
+    const existingTargets = this.getAllActiveQueryTargets();
+
+    this.activeClients[clientState.clientId] = clientState;
+    const newTargets = this.getAllActiveQueryTargets();
+
+    const addedTargets: TargetId[] = [];
+    const removedTargets: TargetId[] = [];
+
+    newTargets.forEach(async targetId => {
+      if (!existingTargets.has(targetId)) {
+        addedTargets.push(targetId);
+      }
+    });
+
+    existingTargets.forEach(async targetId => {
+      if (!newTargets.has(targetId)) {
+        removedTargets.push(targetId);
+      }
+    });
+
+    return this.syncEngine.applyActiveTargetsChange(
+      addedTargets,
+      removedTargets
     );
   }
 }
@@ -945,13 +979,9 @@ export class MemorySharedClientState implements SharedClientState {
     this.localState.addQueryTarget(targetId);
   }
 
-  hasLocalQueryTarget(targetId: TargetId): boolean {
-    return this.localState.activeTargetIds.has(targetId);
-  }
-
   trackQueryUpdate(
-    targetId: BatchId,
-    state: 'active' | 'inactive' | 'rejected',
+    targetId: TargetId,
+    state: QueryTargetState,
     error?: FirestoreError
   ): void {
     // No op.
@@ -961,7 +991,7 @@ export class MemorySharedClientState implements SharedClientState {
     this.localState.removeQueryTarget(targetId);
   }
 
-  getAllActiveQueryTargets(): SortedSet<TargetId> {
+  getAllActiveQueryTargets(): TargetIdSet {
     return this.localState.activeTargetIds;
   }
 

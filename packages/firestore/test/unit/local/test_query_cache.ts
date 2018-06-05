@@ -28,6 +28,8 @@ import { TargetChange } from '../../../src/remote/remote_event';
  * A wrapper around a QueryCache that automatically creates a
  * transaction around every operation to reduce test boilerplate.
  */
+// TODO(multitab): Adjust the `requirePrimaryLease` argument to match the usage
+// in the client.
 export class TestQueryCache {
   constructor(public persistence: Persistence, public cache: QueryCache) {}
 
@@ -49,8 +51,10 @@ export class TestQueryCache {
     });
   }
 
-  count(): number {
-    return this.cache.count;
+  getQueryCount(): Promise<number> {
+    return this.persistence.runTransaction('getQueryCount', true, txn => {
+      return this.cache.getQueryCount(txn);
+    });
   }
 
   removeQueryData(queryData: QueryData): Promise<void> {
@@ -65,12 +69,20 @@ export class TestQueryCache {
     });
   }
 
-  getLastRemoteSnapshotVersion(): SnapshotVersion {
-    return this.cache.getLastRemoteSnapshotVersion();
+  getLastRemoteSnapshotVersion(): Promise<SnapshotVersion> {
+    return this.persistence.runTransaction(
+      'getLastRemoteSnapshotVersion',
+      true,
+      txn => {
+        return this.cache.getLastRemoteSnapshotVersion(txn);
+      }
+    );
   }
 
-  getHighestTargetId(): TargetId {
-    return this.cache.getHighestTargetId();
+  allocateTargetId(): Promise<TargetId> {
+    return this.persistence.runTransaction('allocateTargetId', false, txn => {
+      return this.cache.allocateTargetId(txn);
+    });
   }
 
   getMatchingKeysForTargetId(targetId: TargetId): Promise<DocumentKey[]> {

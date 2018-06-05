@@ -21,6 +21,7 @@ import { QueryData, QueryPurpose } from '../../../src/local/query_data';
 import { RemoteEvent, TargetChange } from '../../../src/remote/remote_event';
 import {
   DocumentWatchChange,
+  ExistenceFilterChange,
   WatchChangeAggregator,
   WatchTargetChange,
   WatchTargetChangeState
@@ -38,6 +39,9 @@ import {
 } from '../../util/helpers';
 import { DocumentKeySet, documentKeySet } from '../../../src/model/collections';
 import { DocumentKey } from '../../../src/model/document_key';
+import { SnapshotVersion } from '../../../src/core/snapshot_version';
+import { ExistenceFilter } from '../../../src/remote/existence_filter';
+import { emptyByteString } from '../../../src/platform/platform';
 
 type TargetMap = {
   [targetId: number]: QueryData;
@@ -75,10 +79,6 @@ function expectTargetChangeEquals(
     expected.resumeToken,
     'TargetChange.resumeToken'
   );
-  expect(actual.snapshotVersion.isEqual(expected.snapshotVersion)).to.equal(
-    true,
-    'TargetChange.snapshotVersion'
-  );
   expect(actual.addedDocuments.isEqual(expected.addedDocuments)).to.equal(
     true,
     'TargetChange.addedDocuments'
@@ -109,10 +109,11 @@ describe('RemoteEvent', () => {
       });
     }
 
-    const aggregator = new WatchChangeAggregator(
-      targetId => (options.targets ? options.targets[targetId] : null),
-      () => options.existingKeys || documentKeySet()
-    );
+    const aggregator = new WatchChangeAggregator({
+      getRemoteKeysForTarget: () => options.existingKeys || documentKeySet(),
+      getQueryDataForTarget: targetId =>
+        options.targets ? options.targets[targetId] : null
+    });
 
     if (options.outstandingResponses) {
       objUtils.forEachNumber(
@@ -129,12 +130,12 @@ describe('RemoteEvent', () => {
       options.changes.forEach(
         change =>
           change instanceof DocumentWatchChange
-            ? aggregator.addDocumentChange(change)
-            : aggregator.addTargetChange(change)
+            ? aggregator.handleDocumentChange(change)
+            : aggregator.handleTargetChange(change)
       );
     }
 
-    aggregator.addTargetChange(
+    aggregator.handleTargetChange(
       new WatchTargetChange(
         WatchTargetChangeState.NoChange,
         targetIds,
@@ -310,7 +311,6 @@ describe('RemoteEvent', () => {
 
     expectEqual(event.snapshotVersion, version(3));
     expect(event.documentUpdates.size).to.equal(0);
-
     expect(size(event.targetChanges)).to.equal(1);
 
     // Reset mapping is empty.
@@ -443,6 +443,7 @@ describe('RemoteEvent', () => {
     const aggregator = createAggregator({
       snapshotVersion: 3,
       targets,
+      existingKeys: keys(doc1),
       changes: [change1, change2]
     });
 
@@ -452,32 +453,48 @@ describe('RemoteEvent', () => {
 
     // The existence filter mismatch will remove the document from target 1,
     // but not synthesize a document delete.
-    aggregator.handleExistenceFilterMismatch(1);
+    aggregator.handleExistenceFilter(
+      new ExistenceFilterChange(1, new ExistenceFilter(0))
+    );
 
     event = aggregator.createRemoteEvent(version(3));
     expect(event.documentUpdates.size).to.equal(0);
+    expect(event.targetMismatches.size).to.equal(1);
     expect(size(event.targetChanges)).to.equal(1);
+
+    const expected = updateMapping(SnapshotVersion.MIN, [], [], [doc1], false);
+    expectTargetChangeEquals(event.targetChanges[1], expected);
   });
 
   it('existence filters removes current changes', () => {
     const targets = listens(1);
 
     const doc1 = doc('docs/1', 1, { value: 1 });
-    const change1 = new DocumentWatchChange([1], [], doc1.key, doc1);
+    const addDoc = new DocumentWatchChange([1], [], doc1.key, doc1);
+    const markCurrent = new WatchTargetChange(
+      WatchTargetChangeState.Current,
+      [1],
+      emptyByteString()
+    );
 
     const aggregator = createAggregator({
       snapshotVersion: 3,
       targets
     });
-    aggregator.addDocumentChange(change1);
+
+    aggregator.handleTargetChange(markCurrent);
+    aggregator.handleDocumentChange(addDoc);
 
     // The existence filter mismatch will clear the previous target mapping,
     // but not synthesize a document delete.
-    aggregator.handleExistenceFilterMismatch(1);
+    aggregator.handleExistenceFilter(
+      new ExistenceFilterChange(1, new ExistenceFilter(0))
+    );
 
     const event = aggregator.createRemoteEvent(version(3));
     expect(event.documentUpdates.size).to.equal(1);
-    expect(size(event.targetChanges)).to.equal(0);
+    expect(event.targetMismatches.size).to.equal(1);
+    expect(event.targetChanges[1].current).to.be.false;
   });
 
   it('handles document update', () => {
@@ -505,9 +522,9 @@ describe('RemoteEvent', () => {
     expectEqual(event.documentUpdates.get(doc1.key), doc1);
     expectEqual(event.documentUpdates.get(doc2.key), doc2);
 
-    aggregator.removeDocument(1, deletedDoc1.key, deletedDoc1);
-    aggregator.addDocument(1, updatedDoc2);
-    aggregator.addDocument(1, doc3);
+    aggregator.removeDocumentFromTarget(1, deletedDoc1.key, deletedDoc1);
+    aggregator.addDocumentToTarget(1, updatedDoc2);
+    aggregator.addDocumentToTarget(1, doc3);
 
     event = aggregator.createRemoteEvent(version(3));
 
@@ -529,6 +546,37 @@ describe('RemoteEvent', () => {
       [deletedDoc1]
     );
     expectTargetChangeEquals(event.targetChanges[1], mapping1);
+  });
+
+  it('only raises events for updated targets', () => {
+    const targets = listens(1, 2);
+
+    const doc1 = doc('docs/1', 1, { value: 1 });
+    const doc2 = doc('docs/2', 2, { value: 2 });
+    const updatedDoc2 = doc('docs/2', 3, { value: 2 });
+
+    const change1 = new DocumentWatchChange([1], [], doc1.key, doc1);
+    const change2 = new DocumentWatchChange([2], [], doc2.key, doc2);
+
+    const aggregator = createAggregator({
+      snapshotVersion: 3,
+      targets,
+      existingKeys: keys(doc1, doc2),
+      changes: [change1, change2]
+    });
+
+    let event = aggregator.createRemoteEvent(version(2));
+    expect(event.documentUpdates.size).to.equal(2);
+    expect(size(event.targetChanges)).to.equal(2);
+
+    aggregator.addDocumentToTarget(2, updatedDoc2);
+    event = aggregator.createRemoteEvent(version(2));
+
+    expect(event.documentUpdates.size).to.equal(1);
+    expect(size(event.targetChanges)).to.equal(1);
+
+    const mapping1 = updateMapping(version(3), [], [updatedDoc2], []);
+    expectTargetChangeEquals(event.targetChanges[2], mapping1);
   });
 
   it('synthesizes deletes', () => {
@@ -570,7 +618,7 @@ describe('RemoteEvent', () => {
     expect(event.resolvedLimboDocuments.has(limboKey)).to.be.false;
   });
 
-  it('filters updates', () => {
+  it('separates document updates', () => {
     const updateTargetId = 1;
     const newDoc = doc('docs/new', 1, { key: 'value' });
     const existingDoc = doc('docs/existing', 1, { some: 'data' });

@@ -19,7 +19,7 @@ import { FirestoreError } from '../util/error';
 import { ClientId } from './shared_client_state';
 
 /** The different states of a watch target. */
-export type QueryTargetState = 'pending' | 'active' | 'inactive' | 'rejected';
+export type QueryTargetState = 'not-current' | 'current' | 'rejected';
 
 /**
  * An interface that describes the actions the SharedClientState class needs to
@@ -38,11 +38,17 @@ export interface SharedClientStateSyncer {
     error?: FirestoreError
   ): Promise<void>;
 
-  /** Applies an query target change from a different tab. */
+  /** Applies a query target change from a different tab. */
   applyTargetState(
     targetId: TargetId,
     state: QueryTargetState,
     error?: FirestoreError
+  ): Promise<void>;
+
+  /** Adds or removes Watch targets for queries from different tabs. */
+  applyActiveTargetsChange(
+    added: TargetId[],
+    removed: TargetId[]
   ): Promise<void>;
 
   /** Returns the IDs of the clients that are currently active. */

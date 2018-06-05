@@ -20,7 +20,6 @@ import { Transaction } from '../core/transaction';
 import { BatchId, OnlineState, TargetId } from '../core/types';
 import { LocalStore } from '../local/local_store';
 import { QueryData, QueryPurpose } from '../local/query_data';
-import { DocumentKey } from '../model/document_key';
 import { MutationResult } from '../model/mutation';
 import {
   BATCHID_UNKNOWN,
@@ -45,12 +44,13 @@ import {
   ExistenceFilterChange,
   WatchChange,
   WatchChangeAggregator,
+  TargetMetadataProvider,
   WatchTargetChange,
   WatchTargetChangeState
 } from './watch_change';
 import { OnlineStateTracker } from './online_state_tracker';
 import { AsyncQueue } from '../util/async_queue';
-import { NoDocument } from '../model/document';
+import { DocumentKeySet } from '../model/collections';
 
 const LOG_TAG = 'RemoteStore';
 
@@ -79,7 +79,7 @@ const MAX_PENDING_WRITES = 10;
  * RemoteStore always starts out offline. A call to `enableNetwork()`
  * initializes the network connection.
  */
-export class RemoteStore {
+export class RemoteStore implements TargetMetadataProvider {
   private pendingWrites: MutationBatch[] = [];
   private lastBatchSeen: BatchId = BATCHID_UNKNOWN;
 
@@ -229,6 +229,16 @@ export class RemoteStore {
     }
   }
 
+  /** {@link TargetMetadataProvider.getQueryDataForTarget} */
+  getQueryDataForTarget(targetId: TargetId): QueryData | null {
+    return this.listenTargets[targetId] || null;
+  }
+
+  /** {@link TargetMetadataProvider.getRemoteKeysForTarget} */
+  getRemoteKeysForTarget(targetId: TargetId): DocumentKeySet {
+    return this.syncEngine.getRemoteKeysForTarget(targetId);
+  }
+
   /**
    * We need to increment the the expected number of pending responses we're due
    * from watch so we wait for the ack to process any messages from this target.
@@ -259,11 +269,7 @@ export class RemoteStore {
       onWatchChange: this.onWatchStreamChange.bind(this)
     });
 
-    this.watchChangeAggregator = new WatchChangeAggregator(
-      targetId => this.listenTargets[targetId] || null,
-      targetId => this.syncEngine.getDocuments(targetId)
-    );
-
+    this.watchChangeAggregator = new WatchChangeAggregator(this);
     this.onlineStateTracker.handleWatchStreamStart();
   }
 
@@ -280,10 +286,6 @@ export class RemoteStore {
   }
 
   private cleanUpWatchStreamState(): void {
-    // If the connection is closed then we'll never get a snapshot version for
-    // the accumulated changes and so we'll never be able to complete the batch.
-    // When we start up again the server is going to resend these changes
-    // anyway, so just toss the accumulated state.
     this.watchChangeAggregator = null;
   }
 
@@ -295,19 +297,22 @@ export class RemoteStore {
     });
   }
 
-  private async onWatchStreamClose(
-    error: FirestoreError | null
-  ): Promise<void> {
+  private async onWatchStreamClose(error?: FirestoreError): Promise<void> {
     assert(
       this.isNetworkEnabled(),
       'onWatchStreamClose() should only be called when the network is enabled'
     );
 
     this.cleanUpWatchStreamState();
-    this.onlineStateTracker.handleWatchStreamFailure();
 
-    // If there was an error, retry the connection.
+    // If we still need the watch stream, retry the connection.
     if (this.shouldStartWatchStream()) {
+      // There should generally be an error if the watch stream was closed when
+      // it's still needed, but it's not quite worth asserting.
+      if (error) {
+        this.onlineStateTracker.handleWatchStreamFailure(error);
+      }
+
       this.startWatchStream();
     } else {
       // No need to restart watch stream because there are no active targets.
@@ -334,97 +339,24 @@ export class RemoteStore {
       return this.handleTargetError(watchChange);
     }
 
-    if (watchChange instanceof ExistenceFilterChange) {
-      await this.handleExistenceFilter(watchChange, snapshotVersion);
+    if (watchChange instanceof DocumentWatchChange) {
+      this.watchChangeAggregator.handleDocumentChange(watchChange);
+    } else if (watchChange instanceof ExistenceFilterChange) {
+      this.watchChangeAggregator.handleExistenceFilter(watchChange);
     } else {
-      if (watchChange instanceof DocumentWatchChange) {
-        this.watchChangeAggregator.addDocumentChange(watchChange);
-      } else {
-        assert(
-          watchChange instanceof WatchTargetChange,
-          'Expected watchChange to be an instance of WatchTargetChange'
-        );
-        this.watchChangeAggregator.addTargetChange(watchChange);
-      }
-
-      if (
-        !snapshotVersion.isEqual(SnapshotVersion.MIN) &&
-        snapshotVersion.compareTo(
-          this.localStore.getLastRemoteSnapshotVersion()
-        ) >= 0
-      ) {
-        await this.raiseWatchSnapshot(snapshotVersion);
-      }
-    }
-  }
-
-  // Handle existence filters and existence filter mismatches.
-  private async handleExistenceFilter(
-    filter: ExistenceFilterChange,
-    snapshotVersion: SnapshotVersion
-  ): Promise<void> {
-    const targetId = filter.targetId;
-    const expectedCount = filter.existenceFilter.count;
-
-    const queryData = this.listenTargets[targetId];
-    if (!queryData) {
-      // A watched target might have been removed already.
-      return this.raiseWatchSnapshot(snapshotVersion);
+      assert(
+        watchChange instanceof WatchTargetChange,
+        'Expected watchChange to be an instance of WatchTargetChange'
+      );
+      this.watchChangeAggregator.handleTargetChange(watchChange);
     }
 
-    const query = queryData.query;
-    if (query.isDocumentQuery()) {
-      if (expectedCount === 0) {
-        // The existence filter told us the document does not exist.
-        // We need to deduce that this document does not exist and apply
-        // a deleted document to our updates. Without applying a deleted
-        // document there might be another query that will raise this
-        // document as part of a snapshot until it is resolved,
-        // essentially exposing inconsistency between queries.
-        const key = new DocumentKey(query.path);
-        this.watchChangeAggregator.removeDocument(
-          targetId,
-          key,
-          new NoDocument(key, snapshotVersion)
-        );
-        return this.raiseWatchSnapshot(snapshotVersion);
-      } else {
-        assert(
-          expectedCount === 1,
-          'Single document existence filter with count: ' + expectedCount
-        );
-      }
-    } else {
-      const currentSize = this.watchChangeAggregator.getCurrentSize(targetId);
-
-      if (currentSize !== expectedCount) {
-        // Existence filter mismatch. We reset the mapping and raise a new
-        // snapshot with `isFromCache:true`.
-        this.watchChangeAggregator.handleExistenceFilterMismatch(targetId);
+    if (!snapshotVersion.isEqual(SnapshotVersion.MIN)) {
+      const lastRemoteSnapshotVersion = await this.localStore.getLastRemoteSnapshotVersion();
+      if (snapshotVersion.compareTo(lastRemoteSnapshotVersion) >= 0) {
+        // We have received a target change with a global snapshot if the snapshot
+        // version is not equal to SnapshotVersion.MIN.
         await this.raiseWatchSnapshot(snapshotVersion);
-
-        // Clear the resume token for the query, since we're in a
-        // known mismatch state.
-        const newQueryData = new QueryData(query, targetId, queryData.purpose);
-        this.listenTargets[targetId] = newQueryData;
-
-        // Cause a hard reset by unwatching and rewatching
-        // immediately, but deliberately don't send a resume token
-        // so that we get a full update.
-        // Make sure we expect that this acks are going to happen.
-        this.sendUnwatchRequest(targetId);
-
-        // Mark the query we send as being on behalf of an existence
-        // filter mismatch, but don't actually retain that in
-        // listenTargets. This ensures that we flag the first
-        // re-listen this way without impacting future listens of
-        // this target (that might happen e.g. on reconnect).
-        const requestQueryData = new QueryData(
-          query,
-          targetId,
-          QueryPurpose.ExistenceFilterMismatch
-        );
-        this.sendWatchRequest(requestQueryData);
       }
     }
   }
@@ -435,6 +367,10 @@ export class RemoteStore {
    * SyncEngine.
    */
   private raiseWatchSnapshot(snapshotVersion: SnapshotVersion): Promise<void> {
+    assert(
+      !snapshotVersion.isEqual(SnapshotVersion.MIN),
+      "Can't raise event for unknown SnapshotVersion"
+    );
     const remoteEvent = this.watchChangeAggregator.createRemoteEvent(
       snapshotVersion
     );
@@ -448,13 +384,42 @@ export class RemoteStore {
         if (queryData) {
           this.listenTargets[targetId] = queryData.update({
             resumeToken: change.resumeToken,
-            snapshotVersion: change.snapshotVersion
+            snapshotVersion
           });
         }
       }
     });
 
-    // Finally handle remote event
+    // Re-establish listens for the targets that have been invalidated by
+    // existence filter mismatches.
+    remoteEvent.targetMismatches.forEach(targetId => {
+      const queryData = this.listenTargets[targetId];
+      if (!queryData) {
+        // A watched target might have been removed already.
+        return;
+      }
+
+      // Clear the resume token for the query, since we're in a known mismatch
+      // state.
+      queryData.resumeToken = emptyByteString();
+
+      // Cause a hard reset by unwatching and rewatching immediately, but
+      // deliberately don't send a resume token so that we get a full update.
+      this.sendUnwatchRequest(targetId);
+
+      // Mark the query we send as being on behalf of an existence filter
+      // mismatch, but don't actually retain that in listenTargets. This ensures
+      // that we flag the first re-listen this way without impacting future
+      // listens of this target (that might happen e.g. on reconnect).
+      const requestQueryData = new QueryData(
+        queryData.query,
+        targetId,
+        QueryPurpose.ExistenceFilterMismatch
+      );
+      this.sendWatchRequest(requestQueryData);
+    });
+
+    // Finally raise remote event
     return this.syncEngine.applyRemoteEvent(remoteEvent);
   }
 
@@ -468,6 +433,7 @@ export class RemoteStore {
         // A watched target might have been removed already.
         if (objUtils.contains(this.listenTargets, targetId)) {
           delete this.listenTargets[targetId];
+          this.watchChangeAggregator.removeTarget(targetId);
           return this.syncEngine.rejectListen(targetId, error);
         }
       });

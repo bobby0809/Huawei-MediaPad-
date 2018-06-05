@@ -40,7 +40,6 @@ import { ObjectMap } from '../util/obj_map';
 import { Deferred } from '../util/promise';
 import { SortedMap } from '../util/sorted_map';
 import { isNullOrUndefined } from '../util/types';
-import * as objUtils from '../util/obj';
 
 import { Query } from './query';
 import { SnapshotVersion } from './snapshot_version';
@@ -66,6 +65,7 @@ import {
   QueryTargetState
 } from '../local/shared_client_state_syncer';
 import { ClientId, SharedClientState } from '../local/shared_client_state';
+import { SortedSet } from '../util/sorted_set';
 
 const LOG_TAG = 'SyncEngine';
 
@@ -93,7 +93,6 @@ class QueryView {
      * to continue receiving new doc changes for the query.
      */
     public resumeToken: ProtoByteString,
-    public snapshotVersion: SnapshotVersion,
     /**
      * The view is responsible for computing the final merged truth of what
      * docs are in the query. It gets notified of local and remote changes,
@@ -182,7 +181,6 @@ export class SyncEngine implements RemoteSyncer, SharedClientStateSyncer {
     );
 
     return this.localStore.allocateQuery(query).then(queryData => {
-      this.sharedClientState.addLocalQueryTarget(queryData.targetId);
       return this.localStore
         .executeQuery(query)
         .then(docs => {
@@ -205,7 +203,6 @@ export class SyncEngine implements RemoteSyncer, SharedClientStateSyncer {
                 query,
                 queryData.targetId,
                 queryData.resumeToken,
-                queryData.snapshotVersion,
                 view
               );
               this.queryViewsByQuery.set(query, data);
@@ -228,7 +225,6 @@ export class SyncEngine implements RemoteSyncer, SharedClientStateSyncer {
     assert(!!queryView, 'Trying to unlisten on query not found:' + query);
 
     return this.localStore.releaseQuery(query).then(() => {
-      this.sharedClientState.removeLocalQueryTarget(queryView.targetId);
       this.remoteStore.unlisten(queryView.targetId);
       return this.removeAndCleanupQuery(queryView).then(() => {
         return this.localStore.collectGarbage();
@@ -326,11 +322,6 @@ export class SyncEngine implements RemoteSyncer, SharedClientStateSyncer {
   applyRemoteEvent(remoteEvent: RemoteEvent): Promise<void> {
     this.assertSubscribed('applyRemoteEvent()');
 
-    // PORTING NOTE: Multi-tab only.
-    objUtils.forEachNumber(remoteEvent.targetChanges, targetId => {
-      this.sharedClientState.trackQueryUpdate(targetId, 'active');
-    });
-
     return this.localStore.applyRemoteEvent(remoteEvent).then(changes => {
       return this.emitNewSnapsAndNotifyLocalStore(changes, remoteEvent);
     });
@@ -357,10 +348,6 @@ export class SyncEngine implements RemoteSyncer, SharedClientStateSyncer {
 
   rejectListen(targetId: TargetId, err: FirestoreError): Promise<void> {
     this.assertSubscribed('rejectListens()');
-
-    // PORTING NOTE: Multi-tab only.
-    this.sharedClientState.trackQueryUpdate(targetId, 'rejected', err);
-
     const limboKey = this.limboKeysByTarget[targetId];
     if (limboKey) {
       // Since this query failed, we won't want to manually unlisten to it.
@@ -383,12 +370,13 @@ export class SyncEngine implements RemoteSyncer, SharedClientStateSyncer {
         new NoDocument(limboKey, SnapshotVersion.forDeletedDoc())
       );
       const resolvedLimboDocuments = documentKeySet().add(limboKey);
-      const event = {
-        snapshotVersion: SnapshotVersion.MIN,
-        targetChanges: {},
+      const event = new RemoteEvent(
+        SnapshotVersion.MIN,
+        /* targetChanges= */ {},
+        /* targetMismatches= */ new SortedSet<TargetId>(primitiveComparator),
         documentUpdates,
         resolvedLimboDocuments
-      };
+      );
       return this.applyRemoteEvent(event);
     } else {
       const queryView = this.queryViewsByTarget[targetId];
@@ -554,7 +542,7 @@ export class SyncEngine implements RemoteSyncer, SharedClientStateSyncer {
       const query = Query.atPath(key.path);
       this.limboKeysByTarget[limboTargetId] = key;
       this.remoteStore.listen(
-        new QueryData(query, limboTargetId, QueryPurpose.Listen)
+        new QueryData(query, limboTargetId, QueryPurpose.LimboResolution)
       );
       this.limboTargetsByKey = this.limboTargetsByKey.insert(
         key,
@@ -586,48 +574,6 @@ export class SyncEngine implements RemoteSyncer, SharedClientStateSyncer {
   // Visible for testing
   currentLimboDocs(): SortedMap<DocumentKey, TargetId> {
     return this.limboTargetsByKey;
-  }
-
-  private async emitNewSnaps(changes: MaybeDocumentMap): Promise<void> {
-    const newSnaps: ViewSnapshot[] = [];
-    const docChangesInAllViews: LocalViewChanges[] = [];
-    const queriesProcessed: Array<Promise<void>> = [];
-
-    this.queryViewsByQuery.forEach((_, queryView) => {
-      if (this.sharedClientState.hasLocalQueryTarget(queryView.targetId)) {
-        queriesProcessed.push(
-          Promise.resolve()
-            .then(() => {
-              const viewDocChanges = queryView.view.computeDocChanges(changes);
-              if (!viewDocChanges.needsRefill) {
-                return viewDocChanges;
-              }
-              // The query has a limit and some docs were removed, so we need
-              // to re-run the query against the local store to make sure we
-              // didn't lose any good docs that had been past the limit.
-              return this.localStore
-                .executeQuery(queryView.query)
-                .then(docs => {
-                  return queryView.view.computeDocChanges(docs, viewDocChanges);
-                });
-            })
-            .then((viewDocChanges: ViewDocumentChanges) => {
-              const viewChange = queryView.view.applyChanges(viewDocChanges);
-
-              if (viewChange.snapshot) {
-                newSnaps.push(viewChange.snapshot);
-                const docChanges = LocalViewChanges.fromSnapshot(
-                  viewChange.snapshot
-                );
-                docChangesInAllViews.push(docChanges);
-              }
-            })
-        );
-      }
-    });
-
-    await Promise.all(queriesProcessed);
-    this.viewHandler!(newSnaps);
   }
 
   private async emitNewSnapsAndNotifyLocalStore(
@@ -665,11 +611,7 @@ export class SyncEngine implements RemoteSyncer, SharedClientStateSyncer {
               viewChange.limboChanges
             ).then(() => {
               if (viewChange.snapshot) {
-                if (
-                  this.sharedClientState.hasLocalQueryTarget(queryView.targetId)
-                ) {
-                  newSnaps.push(viewChange.snapshot);
-                }
+                newSnaps.push(viewChange.snapshot);
                 const docChanges = LocalViewChanges.fromSnapshot(
                   viewChange.snapshot
                 );
@@ -729,39 +671,22 @@ export class SyncEngine implements RemoteSyncer, SharedClientStateSyncer {
   }
 
   // PORTING NOTE: Multi-tab only
-  async applyTargetState(
+  applyTargetState(
     targetId: TargetId,
     state: QueryTargetState,
     error?: FirestoreError
   ): Promise<void> {
-    if (this.isPrimary) {
-      if (state === 'pending') {
-        const query = await this.localStore.getQuery(targetId);
-        if (query) {
-          await this.listen(query);
-        }
-        this.sharedClientState.trackQueryUpdate(targetId, 'active');
-      }
-    } else {
-      if (state === 'active') {
-        let lastSnapshotVersion = SnapshotVersion.MIN;
+    // TODO(multitab): Implement this
+    return Promise.resolve();
+  }
 
-        const queryView = this.queryViewsByTarget[targetId];
-
-        if (queryView) {
-          // use resume token?
-          lastSnapshotVersion = queryView.snapshotVersion;
-        }
-
-        const affectedDocuments = await this.localStore.getQueryChanges(
-          targetId,
-          lastSnapshotVersion
-        );
-        await this.emitNewSnaps(affectedDocuments);
-      }
-
-      // TODO(multitab): Rejected
-    }
+  // PORTING NOTE: Multi-tab only
+  applyActiveTargetsChange(
+    added: TargetId[],
+    removed: TargetId[]
+  ): Promise<void> {
+    // TODO(multitab): Implement this
+    return Promise.resolve();
   }
 
   async enableNetwork(): Promise<void> {
@@ -786,7 +711,7 @@ export class SyncEngine implements RemoteSyncer, SharedClientStateSyncer {
     return this.disableNetwork();
   }
 
-  getDocuments(targetId: TargetId): DocumentKeySet {
+  getRemoteKeysForTarget(targetId: TargetId): DocumentKeySet {
     return this.queryViewsByTarget[targetId]
       ? this.queryViewsByTarget[targetId].view.syncedDocuments
       : documentKeySet();

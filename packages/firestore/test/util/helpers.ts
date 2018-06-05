@@ -129,6 +129,10 @@ export function deletedDoc(
   return new NoDocument(key(keyStr), version(ver));
 }
 
+export function removedDoc(keyStr: string): NoDocument {
+  return new NoDocument(key(keyStr), SnapshotVersion.forDeletedDoc());
+}
+
 export function wrap(value: AnyJs): FieldValue {
   // HACK: We use parseQueryValue() since it accepts scalars as well as
   // arrays / objects, and our tests currently use wrap() pretty generically so
@@ -247,7 +251,7 @@ export function queryData(
   return new QueryData(query(path)._query, targetId, queryPurpose);
 }
 
-export function docInsertRemoteEvent(
+export function docAddedRemoteEvent(
   doc: MaybeDocument,
   updatedInTargets?: TargetId[],
   removedFromTargets?: TargetId[]
@@ -262,11 +266,12 @@ export function docInsertRemoteEvent(
     doc.key,
     doc
   );
-  const aggregator = new WatchChangeAggregator(
-    targetId => queryData(targetId, QueryPurpose.Listen, doc.key.toString()),
-    () => documentKeySet()
-  );
-  aggregator.addDocumentChange(docChange);
+  const aggregator = new WatchChangeAggregator({
+    getRemoteKeysForTarget: () => documentKeySet(),
+    getQueryDataForTarget: targetId =>
+      queryData(targetId, QueryPurpose.Listen, doc.key.toString())
+  });
+  aggregator.handleDocumentChange(docChange);
   return aggregator.createRemoteEvent(doc.version);
 }
 
@@ -285,11 +290,12 @@ export function docUpdateRemoteEvent(
     doc.key,
     doc
   );
-  const aggregator = new WatchChangeAggregator(
-    targetId => queryData(targetId, QueryPurpose.Listen, doc.key.toString()),
-    () => documentKeySet().add(doc.key)
-  );
-  aggregator.addDocumentChange(docChange);
+  const aggregator = new WatchChangeAggregator({
+    getRemoteKeysForTarget: () => keys(doc),
+    getQueryDataForTarget: targetId =>
+      queryData(targetId, QueryPurpose.Listen, doc.key.toString())
+  });
+  aggregator.handleDocumentChange(docChange);
   return aggregator.createRemoteEvent(doc.version);
 }
 
@@ -320,14 +326,13 @@ export function updateMapping(
     removedDocuments = removedDocuments.add(k);
   });
 
-  return {
+  return new TargetChange(
+    resumeTokenForSnapshot(snapshotVersion),
+    !!current,
     addedDocuments,
-    removedDocuments,
     modifiedDocuments,
-    snapshotVersion,
-    resumeToken: resumeTokenForSnapshot(snapshotVersion),
-    current: !!current
-  };
+    removedDocuments
+  );
 }
 
 export function addTargetMapping(

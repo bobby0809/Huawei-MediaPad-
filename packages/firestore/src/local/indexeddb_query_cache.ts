@@ -20,15 +20,13 @@ import { SnapshotVersion } from '../core/snapshot_version';
 import { TargetId } from '../core/types';
 import { DocumentKeySet, documentKeySet } from '../model/collections';
 import { DocumentKey } from '../model/document_key';
-import { assert, fail } from '../util/assert';
+import { assert } from '../util/assert';
 import { immediateSuccessor } from '../util/misc';
 
 import * as EncodedResourcePath from './encoded_resource_path';
 import { GarbageCollector } from './garbage_collector';
 import {
   DbTarget,
-  DbTargetChange,
-  DbTargetChangeKey,
   DbTargetDocument,
   DbTargetDocumentKey,
   DbTargetGlobal,
@@ -40,61 +38,63 @@ import { PersistenceTransaction } from './persistence';
 import { PersistencePromise } from './persistence_promise';
 import { QueryCache } from './query_cache';
 import { QueryData } from './query_data';
-import { SimpleDbStore, SimpleDbTransaction } from './simple_db';
-import { TargetChange } from '../remote/remote_event';
+import { SimpleDb, SimpleDbStore } from './simple_db';
+import { TargetIdGenerator } from '../core/target_id_generator';
 
 export class IndexedDbQueryCache implements QueryCache {
   constructor(private serializer: LocalSerializer) {}
 
-  /**
-   * The last received snapshot version. We store this seperately from the
-   * metadata to avoid the extra conversion to/from DbTimestamp.
-   */
-  private lastRemoteSnapshotVersion = SnapshotVersion.MIN;
-
-  /**
-   * A cached copy of the metadata for the query cache.
-   */
-  private metadata = null;
-
   /** The garbage collector to notify about potential garbage keys. */
   private garbageCollector: GarbageCollector | null = null;
 
+  // PORTING NOTE: We don't cache global metadata for the query cache, since
+  // some of it (in particular `highestTargetId`) can be modified by secondary
+  // tabs. We could perhaps be more granular (and e.g. still cache
+  // `lastRemoteSnapshotVersion` in memory) but for simplicity we currently go
+  // to IndexedDb whenever we need to read metadata. We can revisit if it turns
+  // out to have a meaningful performance impact.
+
+  private targetIdGenerator = TargetIdGenerator.forQueryCache();
+
   start(transaction: PersistenceTransaction): PersistencePromise<void> {
-    return globalTargetStore(transaction)
-      .get(DbTargetGlobal.key)
-      .next(metadata => {
-        assert(
-          metadata !== null,
-          'Missing metadata row that should be added by schema migration.'
-        );
-        this.metadata = metadata;
-        const lastSavedVersion = metadata.lastRemoteSnapshotVersion;
-        this.lastRemoteSnapshotVersion = SnapshotVersion.fromTimestamp(
-          new Timestamp(lastSavedVersion.seconds, lastSavedVersion.nanoseconds)
-        );
-        return PersistencePromise.resolve();
-      });
+    // Nothing to do.
+    return PersistencePromise.resolve();
   }
 
-  getHighestTargetId(): TargetId {
-    return this.metadata.highestTargetId;
+  allocateTargetId(
+    transaction: PersistenceTransaction
+  ): PersistencePromise<TargetId> {
+    return this.retrieveMetadata(transaction).next(metadata => {
+      metadata.highestTargetId = this.targetIdGenerator.after(
+        metadata.highestTargetId
+      );
+      return this.saveMetadata(transaction, metadata).next(
+        () => metadata.highestTargetId
+      );
+    });
   }
 
-  getLastRemoteSnapshotVersion(): SnapshotVersion {
-    return this.lastRemoteSnapshotVersion;
+  getLastRemoteSnapshotVersion(
+    transaction: PersistenceTransaction
+  ): PersistencePromise<SnapshotVersion> {
+    return this.retrieveMetadata(transaction).next(metadata => {
+      return SnapshotVersion.fromTimestamp(
+        new Timestamp(
+          metadata.lastRemoteSnapshotVersion.seconds,
+          metadata.lastRemoteSnapshotVersion.nanoseconds
+        )
+      );
+    });
   }
 
   setLastRemoteSnapshotVersion(
     transaction: PersistenceTransaction,
     snapshotVersion: SnapshotVersion
   ): PersistencePromise<void> {
-    this.lastRemoteSnapshotVersion = snapshotVersion;
-    this.metadata.lastRemoteSnapshotVersion = snapshotVersion.toTimestamp();
-    return globalTargetStore(transaction).put(
-      DbTargetGlobal.key,
-      this.metadata
-    );
+    return this.retrieveMetadata(transaction).next(metadata => {
+      metadata.lastRemoteSnapshotVersion = snapshotVersion.toTimestamp();
+      return this.saveMetadata(transaction, metadata);
+    });
   }
 
   addQueryData(
@@ -102,9 +102,11 @@ export class IndexedDbQueryCache implements QueryCache {
     queryData: QueryData
   ): PersistencePromise<void> {
     return this.saveQueryData(transaction, queryData).next(() => {
-      this.metadata.targetCount += 1;
-      this.updateMetadataFromQueryData(queryData);
-      return this.saveMetadata(transaction);
+      return this.retrieveMetadata(transaction).next(metadata => {
+        metadata.targetCount += 1;
+        this.updateMetadataFromQueryData(queryData, metadata);
+        return this.saveMetadata(transaction, metadata);
+      });
     });
   }
 
@@ -113,11 +115,13 @@ export class IndexedDbQueryCache implements QueryCache {
     queryData: QueryData
   ): PersistencePromise<void> {
     return this.saveQueryData(transaction, queryData).next(() => {
-      if (this.updateMetadataFromQueryData(queryData)) {
-        return this.saveMetadata(transaction);
-      } else {
-        return PersistencePromise.resolve();
-      }
+      return this.retrieveMetadata(transaction).next(metadata => {
+        if (this.updateMetadataFromQueryData(queryData, metadata)) {
+          return this.saveMetadata(transaction, metadata);
+        } else {
+          return PersistencePromise.resolve();
+        }
+      });
     });
   }
 
@@ -125,34 +129,32 @@ export class IndexedDbQueryCache implements QueryCache {
     transaction: PersistenceTransaction,
     queryData: QueryData
   ): PersistencePromise<void> {
-    assert(this.metadata.targetCount > 0, 'Removing from an empty query cache');
-
-    const documentStore = documentTargetStore(transaction);
-    const changeStore = targetChangeStore(transaction);
-    const range = IDBKeyRange.bound(
-      [queryData.targetId],
-      [queryData.targetId + 1],
-      /*lowerOpen=*/ false,
-      /*upperOpen=*/ true
-    );
-
-    return this.notifyGCForRemovedKeys(transaction, range)
-      .next(() => documentStore.delete(range))
-      .next(() => changeStore.delete(range))
+    return this.removeMatchingKeysForTargetId(transaction, queryData.targetId)
       .next(() => targetsStore(transaction).delete(queryData.targetId))
-      .next(() => {
-        this.metadata.targetCount -= 1;
-        return this.saveMetadata(transaction);
+      .next(() => this.retrieveMetadata(transaction))
+      .next(metadata => {
+        assert(metadata.targetCount > 0, 'Removing from an empty query cache');
+        metadata.targetCount -= 1;
+        return this.saveMetadata(transaction, metadata);
+      });
+  }
+
+  private retrieveMetadata(
+    transaction: PersistenceTransaction
+  ): PersistencePromise<DbTargetGlobal> {
+    return globalTargetStore(transaction)
+      .get(DbTargetGlobal.key)
+      .next(metadata => {
+        assert(metadata !== null, 'Missing metadata row.');
+        return metadata;
       });
   }
 
   private saveMetadata(
-    transaction: PersistenceTransaction
+    transaction: PersistenceTransaction,
+    metadata: DbTargetGlobal
   ): PersistencePromise<void> {
-    return globalTargetStore(transaction).put(
-      DbTargetGlobal.key,
-      this.metadata
-    );
+    return globalTargetStore(transaction).put(DbTargetGlobal.key, metadata);
   }
 
   private saveQueryData(
@@ -163,23 +165,29 @@ export class IndexedDbQueryCache implements QueryCache {
   }
 
   /**
-   * Updates the in-memory version of the metadata to account for values in the
-   * given QueryData. Saving is done separately. Returns true if there were any
+   * In-place updates the provided metadata to account for values in the given
+   * QueryData. Saving is done separately. Returns true if there were any
    * changes to the metadata.
    */
-  private updateMetadataFromQueryData(queryData: QueryData): boolean {
-    let needsUpdate = false;
-    if (queryData.targetId > this.metadata.highestTargetId) {
-      this.metadata.highestTargetId = queryData.targetId;
-      needsUpdate = true;
+  private updateMetadataFromQueryData(
+    queryData: QueryData,
+    metadata: DbTargetGlobal
+  ): boolean {
+    if (queryData.targetId > metadata.highestTargetId) {
+      metadata.highestTargetId = queryData.targetId;
+      return true;
     }
 
     // TODO(GC): add sequence number check
-    return needsUpdate;
+    return false;
   }
 
-  get count(): number {
-    return this.metadata.targetCount;
+  getQueryCount(
+    transaction: PersistenceTransaction
+  ): PersistencePromise<number> {
+    return this.retrieveMetadata(transaction).next(
+      metadata => metadata.targetCount
+    );
   }
 
   getQueryData(
@@ -211,7 +219,7 @@ export class IndexedDbQueryCache implements QueryCache {
       .next(() => result);
   }
 
-  private addMatchingKeys(
+  addMatchingKeys(
     txn: PersistenceTransaction,
     keys: DocumentKeySet,
     targetId: TargetId
@@ -227,7 +235,7 @@ export class IndexedDbQueryCache implements QueryCache {
     return PersistencePromise.waitFor(promises);
   }
 
-  private removeMatchingKeys(
+  removeMatchingKeys(
     txn: PersistenceTransaction,
     keys: DocumentKeySet,
     targetId: TargetId
@@ -244,6 +252,22 @@ export class IndexedDbQueryCache implements QueryCache {
       }
     });
     return PersistencePromise.waitFor(promises);
+  }
+
+  removeMatchingKeysForTargetId(
+    txn: PersistenceTransaction,
+    targetId: TargetId
+  ): PersistencePromise<void> {
+    const store = documentTargetStore(txn);
+    const range = IDBKeyRange.bound(
+      [targetId],
+      [targetId + 1],
+      /*lowerOpen=*/ false,
+      /*upperOpen=*/ true
+    );
+    return this.notifyGCForRemovedKeys(txn, range).next(() =>
+      store.delete(range)
+    );
   }
 
   private notifyGCForRemovedKeys(
@@ -326,84 +350,6 @@ export class IndexedDbQueryCache implements QueryCache {
       )
       .next(() => count > 0);
   }
-
-  getChangesSince(
-    transaction: PersistenceTransaction,
-    targetId: TargetId,
-    snapshotVersion: SnapshotVersion
-  ): PersistencePromise<DocumentKeySet> {
-    let documentUpdates = documentKeySet();
-    const range = IDBKeyRange.bound(
-      [
-        targetId,
-        this.serializer.toTimestampArray(snapshotVersion.toTimestamp())
-      ],
-      [targetId + 1],
-      /*lowerOpen=*/ false,
-      /*upperOpen=*/ true
-    );
-    return targetChangeStore(transaction)
-      .iterate({ range }, (_, targetChange) => {
-        documentUpdates = documentUpdates.unionWith(
-          this.serializer.fromDbTargetChange(targetChange)
-        );
-      })
-      .next(() => documentUpdates);
-  }
-
-  applyTargetChange(
-    transaction: PersistenceTransaction,
-    targetId: TargetId,
-    change: TargetChange
-  ): PersistencePromise<void> {
-    const promises: Array<PersistencePromise<void>> = [];
-
-    let allModifiedKeys = change.modifiedDocuments;
-
-    if (change.addedDocuments.size > 0) {
-      allModifiedKeys = allModifiedKeys.unionWith(change.addedDocuments);
-      promises.push(
-        this.addMatchingKeys(transaction, change.addedDocuments, targetId)
-      );
-    }
-
-    if (change.removedDocuments.size > 0) {
-      allModifiedKeys = allModifiedKeys.unionWith(change.removedDocuments);
-      promises.push(
-        this.removeMatchingKeys(transaction, change.removedDocuments, targetId)
-      );
-    }
-
-    // We always write the changes to IndexedDb, even if `allModifiedKeys` is
-    // empty. This allows us to replace existing changes with an empty set.
-    promises.push(
-      targetChangeStore(transaction).put(
-        this.serializer.toDbTargetChanges(
-          targetId,
-          change.snapshotVersion,
-          allModifiedKeys
-        )
-      )
-    );
-
-    return PersistencePromise.waitFor(promises);
-  }
-
-  getQuery(
-    transaction: PersistenceTransaction,
-    targetId: TargetId
-  ): PersistencePromise<Query | null> {
-    return targetsStore(transaction)
-      .get(targetId)
-      .next(found => {
-        if (found) {
-          const target = this.serializer.fromDbTarget(found);
-          return target.query;
-        } else {
-          return null;
-        }
-      });
-  }
 }
 
 /**
@@ -412,7 +358,7 @@ export class IndexedDbQueryCache implements QueryCache {
 function targetsStore(
   txn: PersistenceTransaction
 ): SimpleDbStore<DbTargetKey, DbTarget> {
-  return getStore<DbTargetKey, DbTarget>(txn, DbTarget.store);
+  return SimpleDb.getStore<DbTargetKey, DbTarget>(txn, DbTarget.store);
 }
 
 /**
@@ -421,7 +367,10 @@ function targetsStore(
 function globalTargetStore(
   txn: PersistenceTransaction
 ): SimpleDbStore<DbTargetGlobalKey, DbTargetGlobal> {
-  return getStore<DbTargetGlobalKey, DbTargetGlobal>(txn, DbTargetGlobal.store);
+  return SimpleDb.getStore<DbTargetGlobalKey, DbTargetGlobal>(
+    txn,
+    DbTargetGlobal.store
+  );
 }
 
 /**
@@ -430,31 +379,8 @@ function globalTargetStore(
 function documentTargetStore(
   txn: PersistenceTransaction
 ): SimpleDbStore<DbTargetDocumentKey, DbTargetDocument> {
-  return getStore<DbTargetDocumentKey, DbTargetDocument>(
+  return SimpleDb.getStore<DbTargetDocumentKey, DbTargetDocument>(
     txn,
     DbTargetDocument.store
   );
-}
-
-/**
- * Helper to get a typed SimpleDbStore for the target change object store.
- */
-function targetChangeStore(
-  txn: PersistenceTransaction
-): SimpleDbStore<DbTargetChangeKey, DbTargetChange> {
-  return getStore<DbTargetChangeKey, DbTargetChange>(txn, DbTargetChange.store);
-}
-
-/**
- * Helper to get a typed SimpleDbStore from a transaction.
- */
-function getStore<KeyType extends IDBValidKey, ValueType>(
-  txn: PersistenceTransaction,
-  store: string
-): SimpleDbStore<KeyType, ValueType> {
-  if (txn instanceof SimpleDbTransaction) {
-    return txn.store<KeyType, ValueType>(store);
-  } else {
-    return fail('Invalid transaction object provided!');
-  }
 }

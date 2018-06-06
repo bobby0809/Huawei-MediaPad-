@@ -15,7 +15,12 @@
  */
 
 import { Query } from '../core/query';
-import { documentKeySet, DocumentMap, documentMap } from '../model/collections';
+import {
+  documentKeySet,
+  DocumentMap,
+  documentMap,
+  maybeDocumentMap
+} from '../model/collections';
 import { Document, MaybeDocument, NoDocument } from '../model/document';
 import { DocumentKey } from '../model/document_key';
 
@@ -128,6 +133,7 @@ export class IndexedDbRemoteDocumentCache implements RemoteDocumentCache {
     const documentPromises: Array<PersistencePromise<MaybeDocument>> = [];
 
     let changedKeys = documentKeySet();
+    let changesDocs = maybeDocumentMap();
 
     const range = IDBKeyRange.lowerBound(
       this.lastReturnedDocumentChangesId,

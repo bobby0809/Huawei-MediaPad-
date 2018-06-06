@@ -938,4 +938,34 @@ export class LocalStore {
     });
     return promiseChain;
   }
+
+  // PORTING NOTE: Multi tab.
+  getQueryDataForTarget(targetId: TargetId): Promise<QueryData | null> {
+    return this.persistence.runTransaction('Get query', false, txn => {
+      return this.queryCache.getQueryDataForTarget(txn, targetId);
+    });
+  }
+
+  // // PORTING NOTE: Multi tab.
+  // getQueryChanges(
+  //   targetId: TargetId,
+  //   lastSnapshotVersion: SnapshotVersion
+  // ): Promise<MaybeDocumentMap> {
+  //   return this.persistence.runTransaction('Get query changes', false, txn => {
+  //     return this.queryCache
+  //       .getChangesSince(txn, targetId, lastSnapshotVersion)
+  //       .next(changedKeys =>
+  //         this.localDocuments.getDocuments(txn, changedKeys)
+  //       );
+  //   });
+  // }
+  getNewDocumentChanges() {
+    return this.persistence.runTransaction(
+      'Get new document changes',
+      false,
+      txn => {
+        return this.remoteDocuments.getNewDocumentChanges(txn);
+      }
+    );
+  }
 }

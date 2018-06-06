@@ -402,60 +402,30 @@ describeSpec('Listens:', [], () => {
     }
   );
 
-  // TODO(multitab): Drain queue on client switch
-  //
-  // specTest(
-  //   'Query only raises events in originating client',
-  //   ['exclusive', 'multi-client'],
-  //   () => {
-  //     const primaryClient = 0;
-  //     const secondaryClient = 1;
-  //
-  //     const primaryQuery = Query.atPath(path('collection1dd'));
-  //     const secondaryQuery = Query.atPath(path('collection2'));
-  //
-  //     return client(primaryClient)
-  //       .becomeVisible()
-  //       .client(secondaryClient)
-  //       .userListens(secondaryQuery)
-  //       .expectEvents(secondaryQuery, { fromCache: true })
-  //       .client(primaryClient)
-  //       .drainQueue()
-  //       .watchOpens(secondaryQuery) // this should be expectlisten
-  //       .watchAcksFull(secondaryQuery, 1000)
-  //       .userListens(primaryQuery)
-  //       .expectEvents(primaryQuery, { fromCache: true })
-  //       .client(secondaryClient)
-  //       .drainQueue()
-  //       .expectEvents(secondaryQuery, {})
-  //       .client(primaryClient)
-  //       .drainQueue()
-  //       .watchAcksFull(primaryQuery, 1000)
-  //       .expectEvents(primaryQuery, {})
-  //       .client(secondaryClient)
-  //       .drainQueue(); // no event
-  //   }
-  // );
+  specTest(
+    'Query is executed by primary client',
+    ['exclusive', 'multi-client'],
+    () => {
+      const query = Query.atPath(path('collection'));
+      const docA = doc('collection/a', 1000, { key: 'a' });
 
-  // specTest(
-  //     'Query is executed by primary client',
-  //     ['exclusive', 'multi-client'],
-  //     () => {
-  //       const query = Query.atPath(path('collection'));
-  //       const docA = doc('collection/a', 1000, { key: 'a' });
-  //
-  //       return client(0)
-  //           .becomeVisible()
-  //           .client(1)
-  //           .userListens(query)
-  //           .expectEvents(query, {fromCache:true})
-  //           .client(0)
-  //           .drainQueue()
-  //           .expectListen(query) // this should be expectlisten
-  //           // .watchAcksFull(query, 1000, docA)
-  //           // .client(1)
-  //           // .drainQueue()
-  //           // .expectEvents(query, {added:[docA], fromCache:true});   // this should also fire for from cache only switch with empty query
-  //     }
-  // );
+      return client(0)
+        .becomeVisible()
+        .client(1)
+        .userListens(query)
+        .expectEvents(query, { fromCache: true })
+        .client(0)
+        .expectListen(query)
+        .watchAcks(query)
+        .watchSends({ affects: [query] }, docA)
+        .watchSnapshots(1000)
+        .client(1)
+        .expectEvents(query, { added: [docA], fromCache: true })
+        .client(0)
+        .watchCurrents(query, 'resume-token-2000')
+        .watchSnapshots(2000)
+        .client(1)
+        .expectEvents(query, { fromCache: false });
+    }
+  );
 });

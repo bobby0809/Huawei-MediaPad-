@@ -226,12 +226,14 @@ export class View {
    * Updates the view with the given ViewDocumentChanges and updates limbo docs
    * and sync state from the given (optional) target change.
    * @param docChanges The set of changes to make to the view's docs.
+   * @param current
    * @param targetChange A target change to apply for computing limbo docs and
    *        sync state.
    * @return A new ViewChange with the given docs, changes, and sync state.
    */
   applyChanges(
     docChanges: ViewDocumentChanges,
+    current?: boolean,
     targetChange?: TargetChange
   ): ViewChange {
     assert(!docChanges.needsRefill, 'Cannot apply changes that need a refill');
@@ -247,8 +249,8 @@ export class View {
       );
     });
 
-    this.applyTargetChange(targetChange);
-    const limboChanges = this.updateLimboDocuments();
+    this.applyTargetChange(current, targetChange);
+    const limboChanges = targetChange ? this.updateLimboDocuments() : [];
     const synced = this.limboDocuments.size === 0 && this.current;
     const newSyncState = synced ? SyncState.Synced : SyncState.Local;
     const syncStateChanged = newSyncState !== this.syncState;
@@ -325,7 +327,10 @@ export class View {
    * Updates syncedDocuments, current, and limbo docs based on the given change.
    * Returns the list of changes to which docs are in limbo.
    */
-  private applyTargetChange(targetChange?: TargetChange): void {
+  private applyTargetChange(
+    current?: boolean,
+    targetChange?: TargetChange
+  ): void {
     if (targetChange) {
       targetChange.addedDocuments.forEach(
         key => (this._syncedDocuments = this._syncedDocuments.add(key))
@@ -339,7 +344,11 @@ export class View {
       targetChange.removedDocuments.forEach(
         key => (this._syncedDocuments = this._syncedDocuments.delete(key))
       );
-      this.current = targetChange.current;
+
+      assert(current === targetChange.current, '');
+    }
+    if (current !== undefined) {
+      this.current = current;
     }
   }
 

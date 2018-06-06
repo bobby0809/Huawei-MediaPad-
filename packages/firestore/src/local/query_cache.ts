@@ -117,6 +117,11 @@ export interface QueryCache extends GarbageSource {
     query: Query
   ): PersistencePromise<QueryData | null>;
 
+  getQueryDataForTarget(
+    txn: PersistenceTransaction,
+    targetId: TargetId
+  ): PersistencePromise<QueryData | null>;
+
   /**
    * Adds the given document keys to cached query results of the given target
    * ID.

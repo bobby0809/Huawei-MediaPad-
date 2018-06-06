@@ -70,7 +70,6 @@ export class ClientMemoryState {
   queryMapping: QueryMap;
   limboMapping: LimboMap;
 
-  queryIdGenerator: TargetIdGenerator;
   limboIdGenerator: TargetIdGenerator;
 
   constructor() {
@@ -81,11 +80,41 @@ export class ClientMemoryState {
     this.queryMapping = {};
     this.limboMapping = {};
     this.activeTargets = {};
-    this.queryIdGenerator = TargetIdGenerator.forQueryCache();
     this.limboIdGenerator = TargetIdGenerator.forSyncEngine();
   }
 }
 
+class CachedTargetIdGenerator {
+  private queryMapping: QueryMap = {};
+  private targetIdGenerator = TargetIdGenerator.forQueryCache();
+
+  next(query: Query): TargetId {
+    if (objUtils.contains(this.queryMapping, query.canonicalId())) {
+      // assert sth?
+      return this.queryMapping[query.canonicalId()];
+      //throw new Error("Target ID already exists for query: " + query);
+    }
+    const targetId = this.targetIdGenerator.next();
+    this.queryMapping[query.canonicalId()] = targetId;
+    return targetId;
+  }
+
+  cachedId(query: Query): TargetId {
+    if (!objUtils.contains(this.queryMapping, query.canonicalId())) {
+      throw new Error("Target ID doesn't exists for query: " + query);
+    }
+
+    return this.queryMapping[query.canonicalId()];
+  }
+
+  purge(query: Query): void {
+    if (!objUtils.contains(this.queryMapping, query.canonicalId())) {
+      throw new Error("Target ID doesn't exists for query: " + query);
+    }
+
+    delete this.queryMapping[query.canonicalId()];
+  }
+}
 /**
  * Provides a high-level language to construct spec tests that can be exported
  * to the spec JSON format or be run as a spec test directly.
@@ -101,16 +130,14 @@ export class SpecBuilder {
 
   private steps: SpecStep[] = [];
 
+  private queryIdGenerator = new CachedTargetIdGenerator();
+
   private readonly currentClientState: ClientMemoryState = new ClientMemoryState();
 
   // Accessor function that can be overridden to return a different
   // `ClientMemoryState`.
   protected get clientState(): ClientMemoryState {
     return this.currentClientState;
-  }
-
-  private get queryIdGenerator(): TargetIdGenerator {
-    return this.clientState.queryIdGenerator;
   }
 
   private get limboIdGenerator(): TargetIdGenerator {
@@ -167,7 +194,7 @@ export class SpecBuilder {
         targetId = this.queryMapping[query.canonicalId()];
       }
     } else {
-      targetId = this.queryIdGenerator.next();
+      targetId = this.queryIdGenerator.next(query);
     }
 
     this.queryMapping[query.canonicalId()] = targetId;
@@ -177,32 +204,6 @@ export class SpecBuilder {
     };
     this.currentStep = {
       userListen: [targetId, SpecBuilder.queryToSpec(query)],
-      stateExpect: { activeTargets: objUtils.shallowCopy(this.activeTargets) }
-    };
-    return this;
-  }
-
-  watchOpens(query: Query): this {
-    this.nextStep();
-
-    let targetId: TargetId = 0;
-    if (objUtils.contains(this.queryMapping, query.canonicalId())) {
-      if (this.config.useGarbageCollection) {
-        throw new Error('Listening to same query twice: ' + query);
-      } else {
-        targetId = this.queryMapping[query.canonicalId()];
-      }
-    } else {
-      targetId = this.queryIdGenerator.next();
-    }
-
-    this.queryMapping[query.canonicalId()] = targetId;
-    this.activeTargets[targetId] = {
-      query: SpecBuilder.queryToSpec(query),
-      resumeToken: ''
-    };
-    this.currentStep = {
-      watchOpens: [targetId, SpecBuilder.queryToSpec(query)],
       stateExpect: { activeTargets: objUtils.shallowCopy(this.activeTargets) }
     };
     return this;
@@ -240,6 +241,7 @@ export class SpecBuilder {
     const targetId = this.queryMapping[query.canonicalId()];
     if (this.config.useGarbageCollection) {
       delete this.queryMapping[query.canonicalId()];
+      this.queryIdGenerator.purge(query);
     }
     delete this.activeTargets[targetId];
     this.currentStep = {
@@ -335,6 +337,7 @@ export class SpecBuilder {
     // Reset our mappings / target ids since all existing listens will be
     // forgotten.
     this.clientState.reset();
+    this.queryIdGenerator = new CachedTargetIdGenerator();
     return this;
   }
 
@@ -350,6 +353,7 @@ export class SpecBuilder {
     // Reset our mappings / target ids since all existing listens will be
     // forgotten.
     this.clientState.reset();
+    this.queryIdGenerator = new CachedTargetIdGenerator();
     return this;
   }
 
@@ -614,6 +618,26 @@ export class SpecBuilder {
         runBackoffTimer: opts.runBackoffTimer
       }
     };
+    return this;
+  }
+
+  expectListen(query: Query): this {
+    this.assertStep('Expectations require previous step');
+
+    const targetId = this.queryIdGenerator.cachedId(query);
+    this.queryMapping[query.canonicalId()] = targetId;
+
+    this.activeTargets[targetId] = {
+      query: SpecBuilder.queryToSpec(query),
+      resumeToken: ''
+    };
+
+    const currentStep = this.currentStep!;
+    currentStep.clientListens = SpecBuilder.queryToSpec(query);
+    currentStep.stateExpect = currentStep.stateExpect || {};
+    currentStep.stateExpect.activeTargets = objUtils.shallowCopy(
+      this.activeTargets
+    );
     return this;
   }
 

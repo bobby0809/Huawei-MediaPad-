@@ -621,7 +621,7 @@ export class SpecBuilder {
     return this;
   }
 
-  expectListen(query: Query): this {
+  expectListen(query: Query, resumeToken?: string): this {
     this.assertStep('Expectations require previous step');
 
     const targetId = this.queryIdGenerator.cachedId(query);
@@ -629,7 +629,7 @@ export class SpecBuilder {
 
     this.activeTargets[targetId] = {
       query: SpecBuilder.queryToSpec(query),
-      resumeToken: ''
+      resumeToken: resumeToken || ''
     };
 
     const currentStep = this.currentStep!;
@@ -837,9 +837,7 @@ export class SpecBuilder {
  */
 // PORTING NOTE: Only used by web multi-tab tests.
 export class MultiClientSpecBuilder extends SpecBuilder {
-  // TODO(multitab): Consider merging this with SpecBuilder.
   private activeClientIndex = -1;
-
   private clientStates: ClientMemoryState[] = [];
 
   protected get clientState(): ClientMemoryState {
@@ -882,6 +880,11 @@ export function spec(): SpecBuilder {
 
 /** Starts a new multi-client SpecTest. */
 // PORTING NOTE: Only used by web multi-tab tests.
-export function client(num: number): MultiClientSpecBuilder {
-  return new MultiClientSpecBuilder().client(num);
+export function client(
+  num: number,
+  withGcEnabled?: boolean
+): MultiClientSpecBuilder {
+  const specBuilder = new MultiClientSpecBuilder();
+  specBuilder.withGCEnabled(withGcEnabled === true);
+  return specBuilder.client(num);
 }

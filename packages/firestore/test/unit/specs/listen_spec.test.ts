@@ -402,30 +402,106 @@ describeSpec('Listens:', [], () => {
     }
   );
 
+  specTest('Query is executed by primary client', ['multi-client'], () => {
+    const query = Query.atPath(path('collection'));
+    const docA = doc('collection/a', 1000, { key: 'a' });
+
+    return client(0)
+      .becomeVisible()
+      .client(1)
+      .userListens(query)
+      .expectEvents(query, { fromCache: true })
+      .client(0)
+      .expectListen(query)
+      .watchAcks(query)
+      .watchSends({ affects: [query] }, docA)
+      .watchSnapshots(1000)
+      .client(1)
+      .expectEvents(query, { added: [docA], fromCache: true })
+      .client(0)
+      .watchCurrents(query, 'resume-token-2000')
+      .watchSnapshots(2000)
+      .client(1)
+      .expectEvents(query, { fromCache: false });
+  });
+
+  // specTest(
+  //     'Query is shared by primary and secondary clients',
+  //     ['exclusive', 'multi-client'],
+  //     () => {
+  //       const query = Query.atPath(path('collection'));
+  //       const docA = doc('collection/a', 1000, { key: 'a' });
+  //       const docB = doc('collection/b', 2000, { key: 'a' });
+  //
+  //       return client(0)
+  //           .becomeVisible()
+  //           .userListens(query)
+  //           .watchAcksFull(query, 1000, docA)
+  //           .expectEvents(query, { added: [docA] })
+  //           .client(1)
+  //           .userListens(query)
+  //           .expectEvents(query, { added: [docA] })
+  //           .client(2)
+  //           .userListens(query)
+  //           .expectEvents(query, { added: [docA] })
+  //           .client(0)
+  //           .watchSends({ affects: [query] }, docA)
+  //           .watchSnapshots(2000)
+  //           .expectEvents(query, { added: [docB] })
+  //           .client(1)
+  //           .expectEvents(query, { added: [docB] })
+  //           .client(2)
+  //           .expectEvents(query, { added: [docB] });
+  //     }
+  // );
+  //
   specTest(
-    'Query is executed by primary client',
+    'Query only raises events in originating client',
     ['exclusive', 'multi-client'],
     () => {
       const query = Query.atPath(path('collection'));
       const docA = doc('collection/a', 1000, { key: 'a' });
+      const docB = doc('collection/b', 2000, { key: 'a' });
 
-      return client(0)
+      return client(0, /* withGCEnabled= */ false)
         .becomeVisible()
-        .client(1)
         .userListens(query)
-        .expectEvents(query, { fromCache: true })
+        .watchAcksFull(query, 1000, docA)
+        .expectEvents(query, { added: [docA] })
+        .client(1) // No events
         .client(0)
-        .expectListen(query)
-        .watchAcks(query)
-        .watchSends({ affects: [query] }, docA)
-        .watchSnapshots(1000)
+        .userUnlistens(query)
         .client(1)
-        .expectEvents(query, { added: [docA], fromCache: true })
-        .client(0)
-        .watchCurrents(query, 'resume-token-2000')
-        .watchSnapshots(2000)
-        .client(1)
-        .expectEvents(query, { fromCache: false });
+        .userListens(query);
+      // .client(0)
+      // .expectListen(query, 'resume-token-1000')
+      // .watchAcksFull(query, 2000, docB)
+      // .client(1)
+      // .expectEvents(query, { added: [docA, docB] })
     }
   );
+  //
+  // specTest(
+  //     'Query is unlisted by primary client',
+  //     ['exclusive', 'multi-client'],
+  //     () => {
+  //       const query = Query.atPath(path('collection'));
+  //       const docA = doc('collection/a', 1000, { key: 'a' });
+  //       const docB = doc('collection/b', 2000, { key: 'a' });
+  //
+  //       return client(0)
+  //           .becomeVisible()
+  //           .userListens(query)
+  //           .watchAcksFull(query, 1000, docA)
+  //           .expectEvents(query, { added: [docA] })
+  //           .client(1)
+  //           .userListens(query)
+  //           .expectEvents(query, { added: [docA] })
+  //           .client(0)
+  //           .userUnlistens(query)
+  //           .watchSends({ affects: [query] }, docA)
+  //           .watchSnapshots(2000)
+  //           .client(1)
+  //     }
+  // );
 });
